@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Panoul meu de vanzator</title>
+<link rel="stylesheet" href="/style.css" />
+<style>
+  .row { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+  .top-bar { max-width:720px; margin: 0 auto; padding: 0 24px; display:flex; justify-content:space-between; align-items:center; }
+  .top-bar a, .top-bar button { color:#9aa0ab; background:none; border:none; width:auto; padding:6px 10px; }
+  .payu-box { background:#171a21; border:1px solid #2a2e38; border-radius:14px; padding:18px 20px; margin-bottom:20px; }
+  .product-item { background:#171a21; border:1px solid #2a2e38; border-radius:12px; padding:16px 18px; margin-bottom:12px; }
+  .product-item .row button { width:auto; padding:8px 14px; font-size:0.85rem; }
+  .badge { display:inline-block; padding:2px 9px; border-radius:20px; font-size:0.75rem; font-weight:600; }
+  .badge.on { background:#16301f; color:#a4f0bb; }
+  .badge.off { background:#331c1c; color:#ffb3b3; }
+</style>
+</head>
+<body>
+<div class="top-bar">
+  <strong id="seller-name">...</strong>
+  <div>
+    <a href="/vanzator/comenzi.html" style="color:#6c8cff;font-size:0.9rem;margin-right:14px;">Evidenta achizitiilor</a>
+    <button id="logout-btn">Delogare</button>
+  </div>
+</div>
+<header>
+  <h1>Panoul meu de vanzator</h1>
+</header>
+<script src="/common.js"></script>
+<main>
+  <div id="payu-status" class="payu-box">Se verifica statusul contului de plata...</div>
+
+  <div class="row" style="margin-bottom:16px;">
+    <h2 style="margin:0;">Produsele mele</h2>
+    <a href="/vanzator/produs-nou.html"><button style="width:auto;padding:10px 16px;">+ Adauga produs</button></a>
+  </div>
+  <div id="products">Se incarca...</div>
+</main>
+
+<script>
+async function loadMe() {
+  const res = await fetch('/api/vanzator/me');
+  if (res.status === 401) { location.href = '/vanzator/login.html'; return; }
+  const me = await res.json();
+  document.getElementById('seller-name').textContent = me.name;
+
+  const box = document.getElementById('payu-status');
+  if (!me.payuConfigured) {
+    box.innerHTML = '<div class="notice error">PayU nu este configurat pe server (lipsesc cheile din .env) — platile nu vor functiona pana la configurare.</div>';
+  } else if (me.payuVerified) {
+    box.innerHTML = '<div class="notice success">Contul tau de plata PayU este conectat si verificat. Poti primi bani din vanzari.</div>';
+  } else {
+    box.innerHTML = `
+      <div class="notice error">Contul tau de plata PayU nu este inca conectat/verificat. Produsele tale NU vor fi vizibile public pana finalizezi acest pas.</div>
+      <button id="connect-payu" style="margin-top:10px;">Conecteaza-ti contul de plata (PayU)</button>
+    `;
+    document.getElementById('connect-payu').addEventListener('click', async () => {
+      const r = await fetch('/api/vanzator/payu/link');
+      const d = await r.json();
+      if (d.url) location.href = d.url;
+      else alert(d.error || 'Eroare la conectare.');
+    });
+  }
+}
+
+async function loadProducts() {
+  const res = await fetch('/api/vanzator/produse');
+  if (res.status === 401) { location.href = '/vanzator/login.html'; return; }
+  const products = await res.json();
+  const el = document.getElementById('products');
+  if (!products.length) {
+    el.innerHTML = '<p style="color:#9aa0ab;">Nu ai adaugat inca niciun produs.</p>';
+    return;
+  }
+  el.innerHTML = products.map(p => `
+    <div class="product-item">
+      <div class="row">
+        <div>
+          <strong>${escapeHtml(p.name)}</strong>
+          <span class="badge ${p.active ? 'on' : 'off'}">${p.active ? 'Activ' : 'Dezactivat'}</span>
+          <div style="color:#9aa0ab;font-size:0.85rem;margin-top:4px;">
+            ${(p.priceBani / 100).toFixed(2)} RON &middot; stoc: ${p.stockRemaining} din ${p.stockTotal} disponibile
+          </div>
+        </div>
+        <button data-id="${p.id}" class="toggle-btn">${p.active ? 'Dezactiveaza' : 'Activeaza'}</button>
+      </div>
+    </div>
+  `).join('');
+
+  el.querySelectorAll('.toggle-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      await fetch(`/api/vanzator/produse/${btn.dataset.id}/toggle`, { method: 'POST' });
+      loadProducts();
+    });
+  });
+}
+
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  await fetch('/api/vanzator/logout', { method: 'POST' });
+  location.href = '/vanzator/login.html';
+});
+
+loadMe();
+loadProducts();
+</script>
+</body>
+</html>

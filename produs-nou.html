@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Adauga produs nou</title>
+<link rel="stylesheet" href="/style.css" />
+<style>
+  label { display:block; margin: 14px 0 6px; font-size:0.9rem; color:#c7cbd4; }
+  input[type=text], input[type=number], textarea, input[type=file] {
+    width:100%; padding:10px 12px; border-radius:8px; border:1px solid #2a2e38;
+    background:#10131a; color:#e8eaed; font-size:0.9rem; font-family:inherit;
+  }
+  textarea { resize: vertical; min-height: 70px; }
+  .hint { color:#9aa0ab; font-size:0.82rem; margin-top:4px; }
+  .two-col { display:grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Adauga produs nou</h1>
+  <p>Completeaza detaliile produsului si adauga o imagine. Intrebarea de verificare si fisierul digital livrat clientului (cu numerele de participare) sunt generate automat de platforma — nu trebuie sa incarci tu niciun fisier digital.</p>
+</header>
+<main>
+  <div class="question-card">
+    <div id="feedback"></div>
+    <form id="product-form">
+      <label>Nume produs</label>
+      <input type="text" name="name" required />
+
+      <label>Descriere</label>
+      <textarea name="description"></textarea>
+
+      <div class="two-col">
+        <div>
+          <label>Pret per bucata (RON)</label>
+          <input type="number" name="priceRon" min="0.01" step="0.01" required />
+        </div>
+        <div>
+          <label>Stoc (numar de bucati/bilete disponibile)</label>
+          <input type="number" name="stoc" min="1" step="1" required />
+          <div class="hint">Fiecare bucata vanduta primeste un numar unic, in limita acestui stoc.</div>
+        </div>
+      </div>
+
+      <label>Imagine produs</label>
+      <input type="file" name="image" accept="image/*" />
+      <div class="hint">Aceasta este singura incarcare pe care o faci — fisierul livrat clientului (PDF cu numerele de participare) e generat automat.</div>
+
+      <div style="margin-top:24px;">
+        <button type="submit">Publica produsul</button>
+      </div>
+    </form>
+  </div>
+</main>
+
+<script>
+document.getElementById('product-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const button = form.querySelector('button[type="submit"]');
+
+  const fd = new FormData(form);
+
+  button.disabled = true;
+  button.textContent = 'Se publica...';
+  try {
+    const res = await fetch('/api/vanzator/produse', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.ok) {
+      location.href = '/vanzator/dashboard.html';
+    } else {
+      document.getElementById('feedback').innerHTML = `<div class="notice error">${data.error || 'Eroare la salvare.'}</div>`;
+      button.disabled = false;
+      button.textContent = 'Publica produsul';
+    }
+  } catch (err) {
+    document.getElementById('feedback').innerHTML = '<div class="notice error">Eroare de retea. Incearca din nou.</div>';
+    button.disabled = false;
+    button.textContent = 'Publica produsul';
+  }
+});
+</script>
+</body>
+</html>

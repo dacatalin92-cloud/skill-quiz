@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Admin — autentificare</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<header>
+  <h1>Acces administrator</h1>
+  <p>Acces complet la toate comenzile de pe platforma, de la toti vanzatorii.</p>
+</header>
+<main>
+  <div class="question-card">
+    <div id="feedback"></div>
+    <form id="login-form">
+      <label>Parola de administrator</label>
+      <input type="password" name="password" required style="width:100%;padding:10px;margin:6px 0 18px;border-radius:8px;border:1px solid #2a2e38;background:#10131a;color:#e8eaed;" />
+      <button type="submit">Intra</button>
+    </form>
+  </div>
+</main>
+<script>
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const button = form.querySelector('button');
+  button.disabled = true;
+  button.textContent = 'Se verifica...';
+  try {
+    const res = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: form.password.value }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      location.href = '/admin/comenzi.html';
+    } else {
+      document.getElementById('feedback').innerHTML = `<div class="notice error">${data.error || 'Autentificare esuata.'}</div>`;
+      button.disabled = false;
+      button.textContent = 'Intra';
+    }
+  } catch (err) {
+    document.getElementById('feedback').innerHTML = '<div class="notice error">Eroare de retea.</div>';
+    button.disabled = false;
+    button.textContent = 'Intra';
+  }
+});
+</script>
+</body>
+</html>

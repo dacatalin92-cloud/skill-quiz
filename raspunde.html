@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Raspunde la intrebare — deblocheaza produsul digital</title>
+<link rel="stylesheet" href="/style.css" />
+<style>
+  .tickets { display:flex; flex-wrap:wrap; gap:10px; margin: 14px 0; }
+  .tickets img { width: 220px; max-width: 100%; border-radius: 10px; border:1px solid #2a2e38; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Aproape gata!</h1>
+  <p>Plata ta a fost inregistrata. Raspunde corect la intrebarea de mai jos pentru a primi produsul digital.</p>
+</header>
+<main>
+  <div id="tickets-box"></div>
+  <div id="content" class="question-card">Se verifica plata...</div>
+</main>
+<footer>
+  Ai probleme? Scrie-ne si te ajutam manual.
+</footer>
+
+<script src="/common.js"></script>
+<script>
+const orderId = new URLSearchParams(location.search).get('order');
+const contentEl = document.getElementById('content');
+const ticketsBox = document.getElementById('tickets-box');
+let pollTries = 0;
+
+if (!orderId) {
+  contentEl.innerHTML = '<p>Comanda lipseste din link.</p>';
+} else {
+  poll();
+}
+
+function renderTickets(tickets) {
+  if (!tickets || !tickets.length) { ticketsBox.innerHTML = ''; return; }
+  ticketsBox.innerHTML = `
+    <div class="notice">Ai primit ${tickets.length} numar${tickets.length > 1 ? 'e' : ''} de participare:</div>
+    <div class="tickets">
+      ${tickets.map(n => `<img src="/bilet/${orderId}/${n}.svg" alt="Bilet numarul ${n}" />`).join('')}
+    </div>
+  `;
+}
+
+async function poll() {
+  pollTries++;
+  const res = await fetch(`/api/order/${orderId}`);
+  if (!res.ok) {
+    contentEl.innerHTML = '<p>Comanda nu a fost gasita.</p>';
+    return;
+  }
+  const data = await res.json();
+
+  if (data.status === 'pending') {
+    if (pollTries > 20) {
+      contentEl.innerHTML = '<p>Plata inca se proceseaza. Reincarca pagina in cateva secunde.</p>';
+      return;
+    }
+    contentEl.innerHTML = '<p>Se confirma plata...</p>';
+    setTimeout(poll, 1500);
+    return;
+  }
+
+  renderTickets(data.tickets);
+
+  if (data.status === 'unlocked') {
+    renderUnlocked(data.downloadUrl);
+    return;
+  }
+  if (data.status === 'locked') {
+    renderLocked(data.message);
+    return;
+  }
+  if (data.status === 'paid') {
+    renderQuestion(data.question, data.attemptsLeft);
+  }
+}
+
+function renderQuestion(question, attemptsLeft) {
+  contentEl.innerHTML = `
+    <div class="attempts">Incercari ramase: ${attemptsLeft}</div>
+    <h2>${escapeHtml(question.text)}</h2>
+    <form id="answer-form">
+      <div class="options">
+        ${question.options.map((opt, i) => `
+          <label class="option">
+            <input type="radio" name="option" value="${i}" required />
+            <span>${escapeHtml(opt)}</span>
+          </label>
+        `).join('')}
+      </div>
+      <button type="submit">Trimite raspunsul</button>
+    </form>
+    <div id="feedback"></div>
+  `;
+  document.getElementById('answer-form').addEventListener('submit', submitAnswer);
+}
+
+async function submitAnswer(event) {
+  event.preventDefault();
+  const form = event.target;
+  const selected = form.option.value;
+  const button = form.querySelector('button');
+  button.disabled = true;
+  button.textContent = 'Se verifica...';
+
+  const res = await fetch('/api/answer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orderId, selectedIndex: parseInt(selected, 10) }),
+  });
+  const data = await res.json();
+
+  if (data.correct) {
+    renderUnlocked(data.downloadUrl);
+    return;
+  }
+
+  if (data.attemptsLeft > 0) {
+    document.getElementById('feedback').innerHTML =
+      '<div class="notice error">Raspuns gresit. Mai ai o intrebare de incercat.</div>';
+    setTimeout(() => renderQuestion(data.nextQuestion, data.attemptsLeft), 900);
+  } else {
+    renderLocked(data.message);
+  }
+}
+
+function renderUnlocked(downloadUrl) {
+  contentEl.innerHTML = `
+    <div class="download-box">
+      <div class="notice success">Raspuns corect! Produsul tau digital este gata.</div>
+      <a class="button-link" href="${downloadUrl}">Descarca produsul</a>
+    </div>
+  `;
+}
+
+function renderLocked(message) {
+  contentEl.innerHTML = `
+    <div class="notice error">${escapeHtml(message || 'Ai epuizat numarul de incercari.')}</div>
+    <p>Ne poti contacta pentru a primi o noua sansa sau o rambursare.</p>
+  `;
+}
+</script>
+</body>
+</html>

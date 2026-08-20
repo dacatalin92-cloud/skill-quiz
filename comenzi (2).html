@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Evidenta achizitiilor</title>
+<link rel="stylesheet" href="/style.css" />
+<style>
+  .top-bar { max-width:960px; margin: 0 auto; padding: 16px 24px 0; display:flex; justify-content:space-between; align-items:center; }
+  .top-bar a { color:#6c8cff; font-size:0.9rem; }
+  main { max-width: 960px; }
+  table { width:100%; border-collapse: collapse; margin-top: 10px; font-size: 0.88rem; }
+  th, td { text-align:left; padding: 10px 12px; border-bottom: 1px solid #2a2e38; }
+  th { color:#9aa0ab; font-weight:600; }
+  .badge { display:inline-block; padding:2px 9px; border-radius:20px; font-size:0.72rem; font-weight:600; }
+  .badge.unlocked { background:#16301f; color:#a4f0bb; }
+  .badge.paid { background:#1c2333; color:#b7c3ff; }
+  .badge.locked { background:#331c1c; color:#ffb3b3; }
+</style>
+</head>
+<body>
+<div class="top-bar">
+  <a href="/vanzator/dashboard.html">&larr; Inapoi la panou</a>
+</div>
+<header>
+  <h1>Evidenta achizitiilor</h1>
+  <p>Toate comenzile confirmate pentru produsele tale, cu numerele de bilet atribuite.</p>
+</header>
+<main>
+  <div id="content" class="question-card">Se incarca...</div>
+</main>
+
+<script src="/common.js"></script>
+<script>
+const statusLabels = { paid: 'In asteptare raspuns', unlocked: 'Deblocat', locked: 'Incercari epuizate' };
+
+async function load() {
+  const res = await fetch('/api/vanzator/comenzi');
+  if (res.status === 401) { location.href = '/vanzator/login.html'; return; }
+  const orders = await res.json();
+  const el = document.getElementById('content');
+  if (!orders.length) {
+    el.innerHTML = '<p style="color:#9aa0ab;">Nu exista inca achizitii confirmate.</p>';
+    return;
+  }
+  el.innerHTML = `
+    <table>
+      <thead>
+        <tr><th>Data</th><th>Produs</th><th>Client</th><th>Telefon</th><th>Cant.</th><th>Numere</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        ${orders.map(o => `
+          <tr>
+            <td>${new Date(o.createdAt + 'Z').toLocaleString('ro-RO')}</td>
+            <td>${escapeHtml(o.productName)}</td>
+            <td>${escapeHtml(o.buyerName || '-')}</td>
+            <td>${escapeHtml(o.buyerPhone || '-')}</td>
+            <td>${o.quantity}</td>
+            <td>${o.tickets.map(n => '#' + String(n).padStart(4,'0')).join(', ') || '-'}</td>
+            <td><span class="badge ${o.status}">${statusLabels[o.status] || o.status}</span></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+load();
+</script>
+</body>
+</html>

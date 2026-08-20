@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Concurs de abilitate — cumperi, raspunzi corect, primesti produsul</title>
+<link rel="stylesheet" href="/style.css" />
+<style>
+  .stock { font-size:0.82rem; margin-bottom:10px; }
+  .stock.ok { color:#a4f0bb; }
+  .stock.low { color:#ffcf7d; }
+  .stock.out { color:#ff8080; }
+  .buy-form input[type=text], .buy-form input[type=tel], .buy-form input[type=number] {
+    width:100%; padding:10px 12px; margin-bottom:10px; border-radius:8px;
+    border:1px solid #2a2e38; background:#10131a; color:#e8eaed; font-size:0.9rem;
+  }
+  .participants-link { display:block; text-align:center; margin-top:10px; font-size:0.82rem; color:#6c8cff; }
+</style>
+</head>
+<body>
+<div style="max-width:720px;margin:0 auto;padding:16px 24px 0;text-align:right;">
+  <a href="/vanzator/inregistrare.html" style="color:#6c8cff;font-size:0.9rem;">Vinde si tu pe aceasta platforma &rarr;</a>
+</div>
+<header>
+  <h1>Concurs de abilitate</h1>
+  <p>Alegi produsul, platesti, raspunzi corect la o intrebare simpla si primesti imediat produsul digital. Fiecare bucata cumparata primeste un numar unic de participare.</p>
+</header>
+<main>
+  <div id="canceled-notice" class="notice error" style="display:none;">
+    Plata a fost anulata. Poti incerca din nou oricand.
+  </div>
+  <div id="products" class="grid">Se incarca produsele...</div>
+</main>
+<footer>
+  Achizitia este conditionata de un raspuns corect la o intrebare de verificare, nu de noroc — produsul
+  digital nu se acorda prin tragere la sorti. Produsele sunt oferite de vanzatori independenti.
+</footer>
+
+<script src="/common.js"></script>
+<script>
+const params = new URLSearchParams(location.search);
+if (params.get('canceled')) {
+  document.getElementById('canceled-notice').style.display = 'block';
+}
+
+async function loadProducts() {
+  const res = await fetch('/api/products');
+  const products = await res.json();
+  const el = document.getElementById('products');
+  if (!products.length) {
+    el.textContent = 'Momentan nu exista produse disponibile.';
+    return;
+  }
+  el.innerHTML = products.map(p => {
+    const soldOut = p.stockRemaining <= 0;
+    const stockClass = soldOut ? 'out' : (p.stockRemaining <= p.stockTotal * 0.1 ? 'low' : 'ok');
+    const stockText = soldOut ? 'Stoc epuizat' : `${p.stockRemaining} din ${p.stockTotal} disponibile`;
+    return `
+    <div class="card">
+      <img src="${p.image ? escapeHtml(p.image) : '/img/placeholder.svg'}" alt="${escapeHtml(p.name)}" />
+      <h3>${escapeHtml(p.name)}</h3>
+      <p>${escapeHtml(p.description || '')}</p>
+      ${p.seller ? `<div class="hint" style="color:#9aa0ab;font-size:0.8rem;margin-bottom:6px;">Vanzator: ${escapeHtml(p.seller.name)}</div>` : ''}
+      <div class="stock ${stockClass}">${stockText}</div>
+      <div class="price">${(p.priceBani / 100).toFixed(2)} ${ escapeHtml((p.currency || 'ron').toUpperCase()) } / bucata</div>
+      ${soldOut ? `
+        <button disabled>Stoc epuizat</button>
+      ` : `
+        <form class="buy-form" onsubmit="return startCheckout(event, '${p.id}')">
+          <input type="text" name="buyerName" placeholder="Numele tau" required />
+          <input type="tel" name="buyerPhone" placeholder="Numar de telefon" required />
+          <input type="number" name="quantity" min="1" max="${p.stockRemaining}" value="1" required />
+          <button type="submit">Cumpara si intra in concurs</button>
+        </form>
+      `}
+      <a class="participants-link" href="/participanti.html?produs=${p.id}">Vezi lista participantilor &rarr;</a>
+    </div>
+  `;
+  }).join('');
+}
+
+async function startCheckout(event, productId) {
+  event.preventDefault();
+  const form = event.target;
+  const button = form.querySelector('button');
+  button.disabled = true;
+  button.textContent = 'Se proceseaza...';
+  try {
+    const res = await fetch('/api/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        productId,
+        name: form.buyerName.value,
+        phone: form.buyerPhone.value,
+        quantity: parseInt(form.quantity.value, 10),
+      }),
+    });
+    const data = await res.json();
+    if (data.url) {
+      location.href = data.url;
+    } else {
+      alert(data.error || 'A aparut o eroare. Incearca din nou.');
+      button.disabled = false;
+      button.textContent = 'Cumpara si intra in concurs';
+    }
+  } catch (err) {
+    alert('A aparut o eroare de retea. Incearca din nou.');
+    button.disabled = false;
+    button.textContent = 'Cumpara si intra in concurs';
+  }
+  return false;
+}
+
+loadProducts();
+</script>
+</body>
+</html>

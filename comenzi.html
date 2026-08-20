@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Admin — toate comenzile</title>
+<link rel="stylesheet" href="/style.css" />
+<style>
+  .top-bar { max-width:1100px; margin: 0 auto; padding: 16px 24px 0; display:flex; justify-content:space-between; align-items:center; }
+  .top-bar button { width:auto; padding:6px 14px; font-size:0.85rem; }
+  main { max-width: 1100px; }
+  table { width:100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem; }
+  th, td { text-align:left; padding: 9px 10px; border-bottom: 1px solid #2a2e38; }
+  th { color:#9aa0ab; font-weight:600; }
+  .badge { display:inline-block; padding:2px 9px; border-radius:20px; font-size:0.72rem; font-weight:600; }
+  .badge.unlocked { background:#16301f; color:#a4f0bb; }
+  .badge.paid { background:#1c2333; color:#b7c3ff; }
+  .badge.locked { background:#331c1c; color:#ffb3b3; }
+</style>
+</head>
+<body>
+<div class="top-bar">
+  <strong>Panou administrator</strong>
+  <button id="logout-btn">Delogare</button>
+</div>
+<header>
+  <h1>Toate comenzile</h1>
+  <p>Vizibil doar pentru tine — acces complet la toti vanzatorii si toti clientii.</p>
+</header>
+<main>
+  <div id="content" class="question-card">Se incarca...</div>
+</main>
+
+<script src="/common.js"></script>
+<script>
+const statusLabels = { paid: 'In asteptare raspuns', unlocked: 'Deblocat', locked: 'Incercari epuizate' };
+
+async function load() {
+  const res = await fetch('/api/admin/comenzi');
+  if (res.status === 401) { location.href = '/admin/login.html'; return; }
+  const orders = await res.json();
+  const el = document.getElementById('content');
+  if (!orders.length) {
+    el.innerHTML = '<p style="color:#9aa0ab;">Nu exista inca achizitii confirmate.</p>';
+    return;
+  }
+  el.innerHTML = `
+    <table>
+      <thead>
+        <tr><th>Data</th><th>Vanzator</th><th>Produs</th><th>Client</th><th>Telefon</th><th>Cant.</th><th>Numere</th><th>Suma</th><th>Comision</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        ${orders.map(o => `
+          <tr>
+            <td>${new Date(o.createdAt + 'Z').toLocaleString('ro-RO')}</td>
+            <td>${escapeHtml(o.sellerName)}<br><span style="color:#9aa0ab;font-size:0.78rem;">${escapeHtml(o.sellerEmail)}</span></td>
+            <td>${escapeHtml(o.productName)}</td>
+            <td>${escapeHtml(o.buyerName || '-')}</td>
+            <td>${escapeHtml(o.buyerPhone || '-')}</td>
+            <td>${o.quantity}</td>
+            <td>${o.tickets.map(n => '#' + String(n).padStart(4,'0')).join(', ') || '-'}</td>
+            <td>${(o.amountBani/100).toFixed(2)} RON</td>
+            <td>${(o.platformFeeBani/100).toFixed(2)} RON</td>
+            <td><span class="badge ${o.status}">${statusLabels[o.status] || o.status}</span></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  await fetch('/api/admin/logout', { method: 'POST' });
+  location.href = '/admin/login.html';
+});
+
+load();
+</script>
+</body>
+</html>

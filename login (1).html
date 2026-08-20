@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Autentificare vanzator</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<header>
+  <h1>Autentificare vanzator</h1>
+  <p>Intra in contul tau ca sa-ti gestionezi produsele.</p>
+</header>
+<main>
+  <div class="question-card">
+    <div id="feedback"></div>
+    <form id="login-form">
+      <label>Email</label>
+      <input type="email" name="email" required style="width:100%;padding:10px;margin:6px 0 14px;border-radius:8px;border:1px solid #2a2e38;background:#10131a;color:#e8eaed;" />
+      <label>Parola</label>
+      <input type="password" name="password" required style="width:100%;padding:10px;margin:6px 0 18px;border-radius:8px;border:1px solid #2a2e38;background:#10131a;color:#e8eaed;" />
+      <button type="submit">Autentificare</button>
+    </form>
+    <p style="text-align:center;margin-top:16px;color:#9aa0ab;font-size:0.9rem;">
+      Nu ai cont? <a href="/vanzator/inregistrare.html" style="color:#6c8cff;">Creeaza unul</a>
+    </p>
+  </div>
+</main>
+<script>
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const button = form.querySelector('button');
+  button.disabled = true;
+  button.textContent = 'Se autentifica...';
+  try {
+    const res = await fetch('/api/vanzator/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: form.email.value, password: form.password.value }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      location.href = '/vanzator/dashboard.html';
+    } else {
+      document.getElementById('feedback').innerHTML = `<div class="notice error">${data.error || 'Autentificare esuata.'}</div>`;
+      button.disabled = false;
+      button.textContent = 'Autentificare';
+    }
+  } catch (err) {
+    document.getElementById('feedback').innerHTML = '<div class="notice error">Eroare de retea. Incearca din nou.</div>';
+    button.disabled = false;
+    button.textContent = 'Autentificare';
+  }
+});
+</script>
+</body>
+</html>

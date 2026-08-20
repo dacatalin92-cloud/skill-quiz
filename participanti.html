@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lista participantilor</title>
+<link rel="stylesheet" href="/style.css" />
+<style>
+  table { width:100%; border-collapse: collapse; margin-top: 10px; }
+  th, td { text-align:left; padding: 10px 12px; border-bottom: 1px solid #2a2e38; font-size: 0.92rem; }
+  th { color:#9aa0ab; font-weight:600; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Lista participantilor</h1>
+  <p>Doar prenumele si numarul atribuit sunt afisate public — datele complete de contact raman private.</p>
+</header>
+<main>
+  <div id="content" class="question-card">Se incarca...</div>
+</main>
+
+<script src="/common.js"></script>
+<script>
+const productId = new URLSearchParams(location.search).get('produs');
+const contentEl = document.getElementById('content');
+
+async function load() {
+  if (!productId) { contentEl.innerHTML = '<p>Produs nespecificat.</p>'; return; }
+  const res = await fetch(`/api/produs/${productId}/participanti`);
+  if (!res.ok) { contentEl.innerHTML = '<p>Produsul nu a fost gasit.</p>'; return; }
+  const data = await res.json();
+  document.getElementById('title').textContent = `Participanti — ${data.productName}`;
+
+  if (!data.participants.length) {
+    contentEl.innerHTML = '<p style="color:#9aa0ab;">Momentan nu exista participanti inregistrati.</p>';
+    return;
+  }
+  contentEl.innerHTML = `
+    <table>
+      <thead><tr><th>Numar</th><th>Prenume</th></tr></thead>
+      <tbody>
+        ${data.participants.map(p => `<tr><td>#${String(p.number).padStart(4,'0')}</td><td>${escapeHtml(p.firstName)}</td></tr>`).join('')}
+      </tbody>
+    </table>
+  `;
+}
+load();
+</script>
+</body>
+</html>

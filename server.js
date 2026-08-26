@@ -12,6 +12,7 @@ const {
 } = require('./lib/session');
 const { makeImageUploader } = require('./lib/uploads');
 const { makePayU } = require('./lib/payu');
+const { makeMailer, escapeHtml } = require('./lib/mailer');
 const { generateQuestion } = require('./lib/questionGenerator');
 const { renderTicketSvg } = require('./lib/ticketImage');
 const { streamTicketsPdf } = require('./lib/ticketPdf');
@@ -45,10 +46,14 @@ const payu = payuConfigured
     })
   : null;
 
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const RESEND_FROM = process.env.RESEND_FROM || 'onboarding@resend.dev';
+const mailer = makeMailer({ apiKey: RESEND_API_KEY, from: RESEND_FROM });
+
 const upload = makeImageUploader();
 
 // ---------------------------------------------------------------------------
-// Notificare PayU — body RAW (necesar pentru verificarea semnaturii), definit
+// Notificare PayU - body RAW (necesar pentru verificarea semnaturii), definit
 // inainte de express.json(). PayU trimite un POST la notifyUrl de fiecare
 // data cand starea unei comenzi se schimba (nu doar la plata reusita).
 // ---------------------------------------------------------------------------
@@ -181,6 +186,30 @@ function markOrderPaid(orderId, payuOrderId) {
     db.prepare(`UPDATE orders SET status = 'paid' WHERE id = ?`).run(orderId);
   }
   assignTickets(db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId));
+  sendOrderConfirmationEmail(order);
+}
+
+// Trimite (best-effort, nu blocheaza fluxul de plata daca esueaza) un email
+// de confirmare catre client, cu link-ul de continuare - util mai ales daca
+// inchide pagina inainte sa raspunda la intrebare.
+function sendOrderConfirmationEmail(order) {
+  if (!mailer || !order.buyer_email) return;
+  const product = getProduct(order.product_id);
+  const link = `${BASE_URL}/raspunde.html?order=${order.id}`;
+  const productName = product ? product.name : 'produsul comandat';
+  mailer
+    .sendEmail({
+      to: order.buyer_email,
+      subject: `Plata confirmata - ${productName}`,
+      html: `
+        <p>Salut${order.buyer_name ? ' ' + escapeHtml(order.buyer_name) : ''},</p>
+        <p>Plata ta pentru <strong>${escapeHtml(productName)}</strong> a fost confirmata.</p>
+        <p>Ca sa primesti produsul digital, raspunde corect la intrebarea de verificare aici:</p>
+        <p><a href="${link}">${link}</a></p>
+        <p>Pastreaza acest email - link-ul de mai sus te duce oricand inapoi la comanda ta, chiar daca inchizi pagina.</p>
+      `,
+    })
+    .catch((err) => console.error('Nu am putut trimite emailul de confirmare catre client:', err.message));
 }
 
 function orderTicketNumbers(orderId) {
@@ -188,7 +217,7 @@ function orderTicketNumbers(orderId) {
 }
 
 // =============================================================================
-// API PUBLIC — vitrina, checkout, raspuns la intrebare, lista participanti
+// API PUBLIC - vitrina, checkout, raspuns la intrebare, lista participanti
 // =============================================================================
 
 app.get('/api/products', (req, res) => {
@@ -230,12 +259,18 @@ app.get('/api/produs/:id/participanti', (req, res) => {
 app.post('/api/checkout', async (req, res) => {
   try {
     if (!payu) return res.status(500).json({ error: 'PayU nu este configurat pe server (vezi .env).' });
-    const { productId, name, phone } = req.body;
+    const { productId, name, phone, email } = req.body;
     const quantity = Math.max(1, Math.min(MAX_QUANTITY_PER_ORDER, parseInt(req.body.quantity, 10) || 1));
 
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Numele este obligatoriu.' });
     if (!phone || !String(phone).trim() || String(phone).replace(/\D/g, '').length < 9) {
       return res.status(400).json({ error: 'Un numar de telefon valid este obligatoriu.' });
+    }
+    // Email-ul e optional - daca lipseste, clientul primeste produsul doar pe
+    // pagina, fara email de confirmare/recuperare.
+    const trimmedEmail = email && String(email).trim() ? String(email).trim() : null;
+    if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      return res.status(400).json({ error: 'Adresa de email nu este valida.' });
     }
 
     const product = getProduct(productId);
@@ -257,9 +292,9 @@ app.post('/api/checkout', async (req, res) => {
     const feeBani = Math.round((totalBani * PLATFORM_FEE_PERCENT) / 100);
 
     db.prepare(
-      `INSERT INTO orders (id, product_id, seller_id, buyer_name, buyer_phone, quantity, attempts_left, amount_bani, platform_fee_bani)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(orderId, product.id, seller.id, String(name).trim(), String(phone).trim(), quantity, MAX_ATTEMPTS, totalBani, feeBani);
+      `INSERT INTO orders (id, product_id, seller_id, buyer_name, buyer_phone, buyer_email, quantity, attempts_left, amount_bani, platform_fee_bani)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(orderId, product.id, seller.id, String(name).trim(), String(phone).trim(), trimmedEmail, quantity, MAX_ATTEMPTS, totalBani, feeBani);
 
     const { redirectUrl, payuOrderId } = await payu.createOrder({
       orderId,
@@ -414,7 +449,7 @@ app.get('/bilet/:orderId/:number.svg', (req, res) => {
   res.send(svg);
 });
 
-// =============================================================================
+// ============================================================================
 // API VANZATORI
 // =============================================================================
 
@@ -436,6 +471,20 @@ app.post('/api/vanzator/inregistrare', async (req, res) => {
     db.prepare(
       `INSERT INTO sellers (id, name, email, password_hash, payu_ext_customer_id) VALUES (?, ?, ?, ?, ?)`
     ).run(id, name, String(email).toLowerCase().trim(), passwordHash, payuExtCustomerId);
+
+    if (mailer) {
+      mailer
+        .sendEmail({
+          to: String(email).toLowerCase().trim(),
+          subject: 'Bine ai venit - contul tau de vanzator a fost creat',
+          html: `
+            <p>Salut ${escapeHtml(name)},</p>
+            <p>Contul tau de vanzator pe platforma a fost creat cu succes.</p>
+            <p>Ultimul pas ca produsele tale sa devina vizibile public: conecteaza-ti contul de plata PayU din panoul tau de vanzator.</p>
+          `,
+        })
+        .catch((err) => console.error('Nu am putut trimite emailul de bun venit catre vanzator:', err.message));
+    }
 
     setSellerCookie(res, id);
     res.json({ ok: true });
@@ -536,7 +585,7 @@ app.post(
 
       db.prepare(
         `INSERT INTO products (id, seller_id, name, description, price_bani, currency, image_path, stock_total)
-         VALUES (?, ?, ?, ?, ?, 'ron', ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?x¯ron', ?, ?)`
       ).run(
         productId,
         req.seller.id,
@@ -562,7 +611,7 @@ app.post('/api/vanzator/produse/:id/toggle', requireSeller, (req, res) => {
   res.json({ ok: true, active: !product.active });
 });
 
-// Evidenta achizitiilor — vanzatorul vede doar comenzile pentru produsele lui.
+// Evidenta achizitiilor - vanzatorul vede doar comenzile pentru produsele lui.
 app.get('/api/vanzator/comenzi', requireSeller, (req, res) => {
   const rows = db
     .prepare(
@@ -578,6 +627,7 @@ app.get('/api/vanzator/comenzi', requireSeller, (req, res) => {
       productName: o.product_name,
       buyerName: o.buyer_name,
       buyerPhone: o.buyer_phone,
+      buyerEmail: o.buyer_email,
       quantity: o.quantity,
       status: o.status,
       amountBani: o.amount_bani,
@@ -587,8 +637,8 @@ app.get('/api/vanzator/comenzi', requireSeller, (req, res) => {
   );
 });
 
-// =============================================================================
-// API ADMIN — acces complet la toate comenzile, de la toti vanzatorii
+// ============================================================================
+// API ADMIN - acces complet la toate comenzile, de la toti vanzatorii
 // =============================================================================
 
 app.post('/api/admin/login', (req, res) => {
@@ -625,6 +675,7 @@ app.get('/api/admin/comenzi', requireAdmin, (req, res) => {
       sellerEmail: o.seller_email,
       buyerName: o.buyer_name,
       buyerPhone: o.buyer_phone,
+      buyerEmail: o.buyer_email,
       quantity: o.quantity,
       status: o.status,
       amountBani: o.amount_bani,
@@ -637,6 +688,6 @@ app.get('/api/admin/comenzi', requireAdmin, (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Serverul ruleaza pe ${BASE_URL} (port ${PORT})`);
-  if (!payu) console.warn('ATENTIE: variabilele PAYU_* lipsesc din .env — platile prin PayU nu vor functiona.');
-  if (!ADMIN_PASSWORD) console.warn('ATENTIE: ADMIN_PASSWORD lipseste din .env — panoul de admin este dezactivat.');
+  if (!payu) console.warn('ATENTIE: variabilele PAYU_* lipsesc din .env - platile prin PayU nu vor functiona.');
+  if (!ADMIN_PASSWORD) console.warn('ATENTIE: ADMIN_PASSWORD lipseste din .env - panoul de admin este dezactivat.');
 });

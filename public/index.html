@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Concurs de abilitate — cumperi, raspunzi corect, primesti produsul</title>
+<title>Concurs de abilitate - cumperi, raspunzi corect, primesti produsul</title>
 <link rel="stylesheet" href="/style.css" />
 <style>
   .stock { font-size:0.82rem; margin-bottom:10px; }
@@ -32,7 +32,7 @@
   <div id="products" class="grid">Se incarca produsele...</div>
 </main>
 <footer>
-  Achizitia este conditionata de un raspuns corect la o intrebare de verificare, nu de noroc — produsul
+  Achizitia este conditionata de un raspuns corect la o intrebare de verificare, nu de noroc - produsul
   digital nu se acorda prin tragere la sorti. Produsele sunt oferite de vanzatori independenti.
 </footer>
 
@@ -69,6 +69,7 @@ async function loadProducts() {
         <form class="buy-form" onsubmit="return startCheckout(event, '${p.id}')">
           <input type="text" name="buyerName" placeholder="Numele tau" required />
           <input type="tel" name="buyerPhone" placeholder="Numar de telefon" required />
+          <input type="email" name="buyerEmail" placeholder="Email (optional, pentru confirmare)" />
           <input type="number" name="quantity" min="1" max="${p.stockRemaining}" value="1" required />
           <button type="submit">Cumpara si intra in concurs</button>
         </form>
@@ -93,6 +94,7 @@ async function startCheckout(event, productId) {
         productId,
         name: form.buyerName.value,
         phone: form.buyerPhone.value,
+        email: form.buyerEmail.value,
         quantity: parseInt(form.quantity.value, 10),
       }),
     });

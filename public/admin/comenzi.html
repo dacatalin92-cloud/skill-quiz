@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Admin — toate comenzile</title>
+<title>Admin - toate comenzile</title>
 <link rel="stylesheet" href="/style.css" />
 <style>
   .top-bar { max-width:1100px; margin: 0 auto; padding: 16px 24px 0; display:flex; justify-content:space-between; align-items:center; }
@@ -25,7 +25,7 @@
 </div>
 <header>
   <h1>Toate comenzile</h1>
-  <p>Vizibil doar pentru tine — acces complet la toti vanzatorii si toti clientii.</p>
+  <p>Vizibil doar pentru tine - acces complet la toti vanzatorii si toti clientii.</p>
 </header>
 <main>
   <div id="content" class="question-card">Se incarca...</div>
@@ -47,7 +47,7 @@ async function load() {
   el.innerHTML = `
     <table>
       <thead>
-        <tr><th>Data</th><th>Vanzator</th><th>Produs</th><th>Client</th><th>Telefon</th><th>Cant.</th><th>Numere</th><th>Suma</th><th>Comision</th><th>Status</th></tr>
+        <tr><th>Data</th><th>Vanzator</th><th>Produs</th><th>Client</th><th>Telefon</th><th>Email</th><th>Cant.</th><th>Numere</th><th>Suma</th><th>Comision</th><th>Status</th></tr>
       </thead>
       <tbody>
         ${orders.map(o => `
@@ -57,6 +57,7 @@ async function load() {
             <td>${escapeHtml(o.productName)}</td>
             <td>${escapeHtml(o.buyerName || '-')}</td>
             <td>${escapeHtml(o.buyerPhone || '-')}</td>
+            <td>${escapeHtml(o.buyerEmail || '-')}</td>
             <td>${o.quantity}</td>
             <td>${o.tickets.map(n => '#' + String(n).padStart(4,'0')).join(', ') || '-'}</td>
             <td>${(o.amountBani/100).toFixed(2)} RON</td>

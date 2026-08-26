@@ -46,7 +46,7 @@ async function load() {
   el.innerHTML = `
     <table>
       <thead>
-        <tr><th>Data</th><th>Produs</th><th>Client</th><th>Telefon</th><th>Cant.</th><th>Numere</th><th>Status</th></tr>
+        <tr><th>Data</th><th>Produs</th><th>Client</th><th>Telefon</th><th>Email</th><th>Cant.</th><th>Numere</th><th>Status</th></tr>
       </thead>
       <tbody>
         ${orders.map(o => `
@@ -55,6 +55,7 @@ async function load() {
             <td>${escapeHtml(o.productName)}</td>
             <td>${escapeHtml(o.buyerName || '-')}</td>
             <td>${escapeHtml(o.buyerPhone || '-')}</td>
+            <td>${escapeHtml(o.buyerEmail || '-')}</td>
             <td>${o.quantity}</td>
             <td>${o.tickets.map(n => '#' + String(n).padStart(4,'0')).join(', ') || '-'}</td>
             <td><span class="badge ${o.status}">${statusLabels[o.status] || o.status}</span></td>

@@ -216,9 +216,9 @@ function orderTicketNumbers(orderId) {
   return db.prepare('SELECT number FROM tickets WHERE order_id = ? ORDER BY number').all(orderId).map((r) => r.number);
 }
 
-// =============================================================================
+// ==============================================================================
 // API PUBLIC - vitrina, checkout, raspuns la intrebare, lista participanti
-// =============================================================================
+// ==============================================================================
 
 app.get('/api/products', (req, res) => {
   const rows = db
@@ -449,9 +449,9 @@ app.get('/bilet/:orderId/:number.svg', (req, res) => {
   res.send(svg);
 });
 
-// ============================================================================
-// API VANZATORI
 // =============================================================================
+// API VANZATORI
+// ==============================================================================
 
 app.post('/api/vanzator/inregistrare', async (req, res) => {
   try {
@@ -585,7 +585,7 @@ app.post(
 
       db.prepare(
         `INSERT INTO products (id, seller_id, name, description, price_bani, currency, image_path, stock_total)
-         VALUES (?, ?, ?, ?, ?, ?x¯ron', ?, ?)`
+         VALUES (?, ?, ?, ?, ?, 'ron', ?, ?)`
       ).run(
         productId,
         req.seller.id,
@@ -637,9 +637,9 @@ app.get('/api/vanzator/comenzi', requireSeller, (req, res) => {
   );
 });
 
-// ============================================================================
-// API ADMIN - acces complet la toate comenzile, de la toti vanzatorii
 // =============================================================================
+// API ADMIN - acces complet la toate comenzile, de la toti vanzatorii
+// ==============================================================================
 
 app.post('/api/admin/login', (req, res) => {
   if (!ADMIN_PASSWORD) return res.status(500).json({ error: 'Admin neconfigurat (lipseste ADMIN_PASSWORD din .env).' });

@@ -67,4 +67,11 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_orders_seller ON orders(seller_id);
 `);
 
+// Migratie usoara: adauga coloana buyer_email pentru baze de date create
+// inainte de a exista trimiterea de email-uri de confirmare catre clienti.
+const orderColumns = db.prepare('PRAGMA table_info(orders)').all().map((c) => c.name);
+if (!orderColumns.includes('buyer_email')) {
+  db.exec('ALTER TABLE orders ADD COLUMN buyer_email TEXT');
+}
+
 module.exports = db;

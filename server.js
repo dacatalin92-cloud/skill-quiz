@@ -225,7 +225,7 @@ app.get('/api/products', (req, res) => {
     .prepare(
       `SELECT p.*, s.name as seller_name, s.payu_verified
        FROM products p JOIN sellers s ON s.id = p.seller_id
-       WHERE p.active = 1 AND s.payu_verified = 1
+       WHERE p.active = 1
        ORDER BY p.created_at DESC`
     )
     .all();
@@ -276,8 +276,8 @@ app.post('/api/checkout', async (req, res) => {
     const product = getProduct(productId);
     if (!product || !product.active) return res.status(404).json({ error: 'Produs inexistent.' });
     const seller = getSeller(product.seller_id);
-    if (!seller || !seller.payu_verified || !seller.payu_ext_customer_id) {
-      return res.status(400).json({ error: 'Vanzatorul nu este inca verificat pentru plati.' });
+    if (!seller) {
+      return res.status(400).json({ error: 'Vanzator inexistent.' });
     }
 
     const assigned = ticketsAssignedCount(product.id);
@@ -289,7 +289,7 @@ app.post('/api/checkout', async (req, res) => {
 
     const orderId = uuidv4();
     const totalBani = product.price_bani * quantity;
-    const feeBani = Math.round((totalBani * PLATFORM_FEE_PERCENT) / 100);
+    const feeBani = 0; // Fara marketplace/split - toti banii merg direct in contul PayU al platformei.
 
     db.prepare(
       `INSERT INTO orders (id, product_id, seller_id, buyer_name, buyer_phone, buyer_email, quantity, attempts_left, amount_bani, platform_fee_bani)
@@ -305,7 +305,7 @@ app.post('/api/checkout', async (req, res) => {
       customerIp: req.ip,
       notifyUrl: `${BASE_URL}/payu/notificare`,
       continueUrl: `${BASE_URL}/raspunde.html?order=${orderId}`,
-      sellerExtCustomerId: seller.payu_ext_customer_id,
+      
     });
 
     if (payuOrderId) {
@@ -453,7 +453,7 @@ app.get('/bilet/:orderId/:number.svg', (req, res) => {
 // API VANZATORI
 // =============================================================================
 
-app.post('/api/vanzator/inregistrare', async (req, res) => {
+app.post('/api/vanzator/inregistrare', async (req, res) => { return res.status(403).json({ error: 'Inregistrarile de vanzatori noi sunt inchise. Acesta este magazinul unui singur vanzator.' });
   try {
     const { name, email, password } = req.body;
     if (!name || !email || !password || password.length < 8) {

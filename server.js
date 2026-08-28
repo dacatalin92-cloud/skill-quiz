@@ -453,7 +453,7 @@ app.get('/bilet/:orderId/:number.svg', (req, res) => {
 // API VANZATORI
 // =============================================================================
 
-app.post('/api/vanzator/inregistrare', async (req, res) => { return res.status(403).json({ error: 'Inregistrarile de vanzatori noi sunt inchise. Acesta este magazinul unui singur vanzator.' });
+app.post('/api/vanzator/inregistrare', async (req, res) => {
   try {
     const { name, email, password } = req.body;
     if (!name || !email || !password || password.length < 8) {

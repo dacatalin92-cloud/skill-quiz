@@ -15,7 +15,7 @@ const { makePayU } = require('./lib/payu');
 const { makeMailer, escapeHtml } = require('./lib/mailer');
 const { generateQuestion } = require('./lib/questionGenerator');
 const { renderTicketSvg } = require('./lib/ticketImage');
-const { streamTicketsPdf } = require('./lib/ticketPdf');
+const { streamTicketsPdf } = require('./lib/ticketPdf'); const { makeWhatsapp } = require('./lib/whatsapp');
 
 const app = express();
 
@@ -48,9 +48,9 @@ const payu = payuConfigured
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const RESEND_FROM = process.env.RESEND_FROM || 'onboarding@resend.dev';
-const mailer = makeMailer({ apiKey: RESEND_API_KEY, from: RESEND_FROM });
+const mailer = makeMailer({ apiKey: RESEND_API_KEY, from: RESEND_FROM }); const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN || ''; const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || ''; const WHATSAPP_TEMPLATE_NAME = process.env.WHATSAPP_TEMPLATE_NAME || 'produs_nou'; const WHATSAPP_TEMPLATE_LANG = process.env.WHATSAPP_TEMPLATE_LANG || 'ro'; const whatsappConfigured = !!(WHATSAPP_TOKEN && WHATSAPP_PHONE_NUMBER_ID); const whatsapp = whatsappConfigured ? makeWhatsapp({ token: WHATSAPP_TOKEN, phoneNumberId: WHATSAPP_PHONE_NUMBER_ID, templateName: WHATSAPP_TEMPLATE_NAME, templateLang: WHATSAPP_TEMPLATE_LANG }) : null;
 
-const upload = makeImageUploader();
+const upload = makeImageUploader(); function getNotificationPhones() { const subs = db.prepare('SELECT phone FROM subscribers').all().map((r) => r.phone); const buyers = db.prepare("SELECT DISTINCT buyer_phone as phone FROM orders WHERE buyer_phone IS NOT NULL AND status IN ('paid','locked','unlocked')").all().map((r) => r.phone); return [...new Set([...subs, ...buyers].filter(Boolean))]; } async function notifyNewProduct(product) { if (!whatsapp) return; const phones = getNotificationPhones(); const priceText = (product.price_bani / 100).toFixed(2) + ' RON'; const link = BASE_URL + '/'; for (const phone of phones) { try { await whatsapp.sendTemplate(phone, [product.name, priceText, link]); } catch (err) { console.error('Nu am putut trimite WhatsApp catre ' + phone + ':', err.message); } } }
 
 // ---------------------------------------------------------------------------
 // Notificare PayU - body RAW (necesar pentru verificarea semnaturii), definit
@@ -87,7 +87,7 @@ app.post('/payu/notificare', express.raw({ type: '*/*' }), (req, res) => {
   }
 });
 
-app.use(express.json());
+app.use(express.json()); app.post('/api/abonare', (req, res) => { const digits = req.body && req.body.phone ? String(req.body.phone).replace(/\D/g, '') : ''; if (!digits || digits.length < 9) { return res.status(400).json({ error: 'Un numar de telefon valid este obligatoriu.' }); } try { db.prepare('INSERT OR IGNORE INTO subscribers (id, phone) VALUES (?, ?)').run(uuidv4(), String(req.body.phone).trim()); res.json({ ok: true }); } catch (err) { console.error(err); res.status(500).json({ error: 'Eroare la abonare.' }); } });
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads/images', express.static(IMAGES_DIR));
@@ -596,7 +596,7 @@ app.post(
         stockTotal
       );
 
-      res.json({ ok: true, productId });
+      res.json({ ok: true, productId }); notifyNewProduct({ name, price_bani: Math.round(parseFloat(priceRon) * 100) }).catch((err) => console.error('Eroare la trimiterea notificarilor WhatsApp:', err.message));
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: 'Eroare la salvarea produsului.' });

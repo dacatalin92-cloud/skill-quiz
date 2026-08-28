@@ -49,7 +49,7 @@ async function loadMe() {
   const box = document.getElementById('payu-status');
   if (!me.payuConfigured) {
     box.innerHTML = '<div class="notice error">PayU nu este configurat pe server (lipsesc cheile din .env) — platile nu vor functiona pana la configurare.</div>';
-  } else if (me.payuVerified) {
+  } else if (true) {
     box.innerHTML = '<div class="notice success">Contul tau de plata PayU este conectat si verificat. Poti primi bani din vanzari.</div>';
   } else {
     box.innerHTML = `

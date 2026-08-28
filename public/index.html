@@ -24,7 +24,7 @@
 <header>
   <h1>Concurs de abilitate</h1>
   <p>Alegi produsul, platesti, raspunzi corect la o intrebare simpla si primesti imediat produsul digital. Fiecare produs digital achizitionat prin abilitate contine un numar unic.</p>
-</header>
+</header><div class="question-card" style="max-width:720px;margin:16px auto 0;padding:16px 20px;"><form id="subscribe-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><span style="flex:1 1 220px;color:#9aa0ab;font-size:0.9rem;">Vrei sa afli primul cand apare un produs nou? Lasa-ti numarul de WhatsApp:</span><input type="tel" id="subscribe-phone" placeholder="Numar WhatsApp (ex: 07xxxxxxxx)" required style="flex:2 1 200px;padding:10px 12px;border-radius:8px;border:1px solid #2a2e38;background:#10131a;color:#e8eaed;font-size:0.9rem;" /><button type="submit" style="width:auto;padding:10px 16px;">Aboneaza-te</button></form><div id="subscribe-feedback" style="font-size:0.85rem;margin-top:8px;"></div></div>
 <main>
   <div id="canceled-notice" class="notice error" style="display:none;">
     Plata a fost anulata. Poti incerca din nou oricand.
@@ -114,7 +114,7 @@ async function startCheckout(event, productId) {
   return false;
 }
 
-loadProducts();
+loadProducts(); document.getElementById('subscribe-form').addEventListener('submit', function(e) { e.preventDefault(); const btn = e.target.querySelector('button'); const input = document.getElementById('subscribe-phone'); const fb = document.getElementById('subscribe-feedback'); btn.disabled = true; fetch('/api/abonare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: input.value }) }).then(function(res) { return res.json(); }).then(function(data) { if (data.ok) { fb.textContent = 'Te-ai abonat! Vei primi un mesaj WhatsApp la fiecare produs nou.'; fb.style.color = '#a4f0bb'; input.value = ''; } else { fb.textContent = data.error || 'Eroare la abonare.'; fb.style.color = '#ff8080'; } btn.disabled = false; }).catch(function() { fb.textContent = 'Eroare de retea. Incearca din nou.'; fb.style.color = '#ff8080'; btn.disabled = false; });});
 </script>
 </body>
 </html>

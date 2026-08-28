@@ -9,7 +9,7 @@
 <body>
 <header>
   <h1>Devino vanzator</h1>
-  <p>Creeaza-ti contul, adauga-ti produsele si conecteaza-ti contul de plata ca sa incasezi automat din fiecare vanzare.</p>
+  <p>Inregistrarile de vanzatori noi sunt inchise. Acesta este magazinul unui singur vanzator.</p>
 </header>
 <main>
   <div class="question-card">
@@ -34,7 +34,7 @@
 <script>
 document.getElementById('reg-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const form = e.target;
+  const form = e.target; document.getElementById('feedback').innerHTML = '<div class="notice error">Inregistrarile de vanzatori noi sunt inchise. Acesta este magazinul unui singur vanzator.</div>'; return;
   const button = form.querySelector('button');
   button.disabled = true;
   button.textContent = 'Se creeaza contul...';

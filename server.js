@@ -10,7 +10,7 @@ const {
   setSellerCookie, clearSellerCookie, getSellerIdFromReq,
   setAdminCookie, clearAdminCookie, isAdminReq,
 } = require('./lib/session');
-const { makeImageUploader } = require('./lib/uploads');
+const { makeImageUploader, IMAGES_DIR } = require('./lib/uploads');
 const { makePayU } = require('./lib/payu');
 const { makeMailer, escapeHtml } = require('./lib/mailer');
 const { generateQuestion } = require('./lib/questionGenerator');
@@ -90,7 +90,7 @@ app.post('/payu/notificare', express.raw({ type: '*/*' }), (req, res) => {
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads/images', express.static(path.join(__dirname, 'uploads', 'images')));
+app.use('/uploads/images', express.static(IMAGES_DIR));
 
 // ---------------------------------------------------------------------------
 // Ajutoare DB

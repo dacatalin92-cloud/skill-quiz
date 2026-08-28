@@ -19,7 +19,7 @@
 </head>
 <body>
 <div style="max-width:720px;margin:0 auto;padding:16px 24px 0;text-align:right;">
-  <a href="/vanzator/inregistrare.html" style="color:#6c8cff;font-size:0.9rem;">Vinde si tu pe aceasta platforma &rarr;</a>
+  
 </div>
 <header>
   <h1>Concurs de abilitate</h1>
@@ -33,7 +33,7 @@
 </main>
 <footer>
   Achizitia este conditionata de un raspuns corect la o intrebare de verificare, nu de noroc - produsul
-  digital nu se acorda prin tragere la sorti. Produsele sunt oferite de vanzatori independenti.
+  digital nu se acorda prin tragere la sorti.
 </footer>
 
 <script src="/common.js"></script>
@@ -60,7 +60,7 @@ async function loadProducts() {
       <img src="${p.image ? escapeHtml(p.image) : '/img/placeholder.svg'}" alt="${escapeHtml(p.name)}" />
       <h3>${escapeHtml(p.name)}</h3>
       <p>${escapeHtml(p.description || '')}</p>
-      ${p.seller ? `<div class="hint" style="color:#9aa0ab;font-size:0.8rem;margin-bottom:6px;">Vanzator: ${escapeHtml(p.seller.name)}</div>` : ''}
+      
       <div class="stock ${stockClass}">${stockText}</div>
       <div class="price">${(p.priceBani / 100).toFixed(2)} ${ escapeHtml((p.currency || 'ron').toUpperCase()) } / bucata</div>
       ${soldOut ? `

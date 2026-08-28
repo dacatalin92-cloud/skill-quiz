@@ -64,7 +64,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_tickets_product ON tickets(product_id);
   CREATE INDEX IF NOT EXISTS idx_tickets_order ON tickets(order_id);
   CREATE INDEX IF NOT EXISTS idx_orders_product ON orders(product_id);
-  CREATE INDEX IF NOT EXISTS idx_orders_seller ON orders(seller_id);
+  CREATE INDEX IF NOT EXISTS idx_orders_seller ON orders(seller_id); CREATE TABLE IF NOT EXISTS subscribers ( id TEXT PRIMARY KEY, phone TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL DEFAULT (datetime('now')) );
 `);
 
 // Migratie usoara: adauga coloana buyer_email pentru baze de date create

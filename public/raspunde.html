@@ -39,7 +39,7 @@ if (!orderId) {
 function renderTickets(tickets) {
   if (!tickets || !tickets.length) { ticketsBox.innerHTML = ''; return; }
   ticketsBox.innerHTML = `
-    <div class="notice">Ai primit ${tickets.length} numar${tickets.length > 1 ? 'e' : ''} de participare:</div>
+    <div class="notice">Ai primit ${tickets.length > 1 ? 'numerele unice' : 'numarul unic'}:</div>
     <div class="tickets">
       ${tickets.map(n => `<img src="/bilet/${orderId}/${n}.svg" alt="Bilet numarul ${n}" />`).join('')}
     </div>

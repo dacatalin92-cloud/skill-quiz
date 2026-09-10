@@ -4,6 +4,11 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Concurs de abilitate - cumperi, raspunzi corect, primesti produsul</title>
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#10131a" />
+<link rel="apple-touch-icon" href="/icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <link rel="stylesheet" href="/style.css" />
 <style>
   .stock { font-size:0.82rem; margin-bottom:10px; }
@@ -19,12 +24,12 @@
 </head>
 <body>
 <div style="max-width:720px;margin:0 auto;padding:16px 24px 0;text-align:right;">
-  
+
 </div>
 <header>
   <h1>Concurs de abilitate</h1>
   <p>Alegi produsul, platesti, raspunzi corect la o intrebare simpla si primesti imediat produsul digital. Fiecare produs digital achizitionat prin abilitate contine un numar unic.</p>
-</header><div class="question-card" style="max-width:720px;margin:16px auto 0;padding:16px 20px;"><form id="subscribe-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><span style="flex:1 1 220px;color:#9aa0ab;font-size:0.9rem;">Vrei sa afli primul cand apare un produs nou? Lasa-ti numarul de WhatsApp:</span><input type="tel" id="subscribe-phone" placeholder="Numar WhatsApp (ex: 07xxxxxxxx)" required style="flex:2 1 200px;padding:10px 12px;border-radius:8px;border:1px solid #2a2e38;background:#10131a;color:#e8eaed;font-size:0.9rem;" /><button type="submit" style="width:auto;padding:10px 16px;">Aboneaza-te</button></form><div id="subscribe-feedback" style="font-size:0.85rem;margin-top:8px;"></div></div>
+</header><div class="question-card" style="max-width:720px;margin:16px auto 0;padding:16px 20px;"><form id="subscribe-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><span style="flex:1 1 220px;color:#9aa0ab;font-size:0.9rem;">Vrei sa afli primul cand apare un produs nou? Lasa-ti numarul de WhatsApp:</span><input type="tel" id="subscribe-phone" placeholder="Numar WhatsApp (ex: 07xxxxxxxx)" required style="flex:2 1 200px;padding:10px 12px;border-radius:8px;border:1px solid #2a2e38;background:#10131a;color:#e8eaed;font-size:0.9rem;" /><button type="submit" style="width:auto;padding:10px 16px;">Aboneaza-te</button></form><div id="subscribe-feedback" style="font-size:0.85rem;margin-top:8px;"></div><div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><button id="push-btn" type="button" onclick="enablePushNotifications()" style="width:auto;padding:10px 16px;">Activeaza notificari pe telefon</button><button id="install-btn" type="button" onclick="installApp()" style="display:none;width:auto;padding:10px 16px;">Instaleaza aplicatia</button></div><div id="push-feedback" style="font-size:0.85rem;margin-top:6px;"></div></div>
 <main>
   <div id="canceled-notice" class="notice error" style="display:none;">
     Plata a fost anulata. Poti incerca din nou oricand.
@@ -60,7 +65,7 @@ async function loadProducts() {
       <img src="${p.image ? escapeHtml(p.image) : '/img/placeholder.svg'}" alt="${escapeHtml(p.name)}" />
       <h3>${escapeHtml(p.name)}</h3>
       <p>${escapeHtml(p.description || '')}</p>
-      
+
       <div class="stock ${stockClass}">${stockText}</div>
       <div class="price">${(p.priceBani / 100).toFixed(2)} ${ escapeHtml((p.currency || 'ron').toUpperCase()) } / bucata</div>
       ${soldOut ? `
@@ -115,6 +120,78 @@ async function startCheckout(event, productId) {
 }
 
 loadProducts(); document.getElementById('subscribe-form').addEventListener('submit', function(e) { e.preventDefault(); const btn = e.target.querySelector('button'); const input = document.getElementById('subscribe-phone'); const fb = document.getElementById('subscribe-feedback'); btn.disabled = true; fetch('/api/abonare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: input.value }) }).then(function(res) { return res.json(); }).then(function(data) { if (data.ok) { fb.textContent = 'Te-ai abonat! Vei primi un mesaj WhatsApp la fiecare produs nou.'; fb.style.color = '#a4f0bb'; input.value = ''; } else { fb.textContent = data.error || 'Eroare la abonare.'; fb.style.color = '#ff8080'; } btn.disabled = false; }).catch(function() { fb.textContent = 'Eroare de retea. Incearca din nou.'; fb.style.color = '#ff8080'; btn.disabled = false; });});
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+async function enablePushNotifications() {
+  const btn = document.getElementById('push-btn');
+  const fb = document.getElementById('push-feedback');
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    fb.textContent = 'Browserul tau nu suporta notificari push.';
+    fb.style.color = '#ff8080';
+    return;
+  }
+  btn.disabled = true;
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      fb.textContent = 'Trebuie sa permiti notificarile din browser ca sa functioneze.';
+      fb.style.color = '#ff8080';
+      btn.disabled = false;
+      return;
+    }
+    const keyRes = await fetch('/api/push/public-key');
+    const keyData = await keyRes.json();
+    if (!keyData.publicKey) {
+      fb.textContent = 'Notificarile push nu sunt configurate momentan pe server.';
+      fb.style.color = '#ff8080';
+      btn.disabled = false;
+      return;
+    }
+    const subscription = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(keyData.publicKey),
+    });
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(subscription),
+    });
+    fb.textContent = 'Notificarile sunt active! Vei primi alerta pe telefon la fiecare produs nou.';
+    fb.style.color = '#a4f0bb';
+    btn.textContent = 'Notificari active';
+  } catch (err) {
+    fb.textContent = 'Eroare la activarea notificarilor.';
+    fb.style.color = '#ff8080';
+    btn.disabled = false;
+  }
+}
+
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', function(e) {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  const installBtn = document.getElementById('install-btn');
+  if (installBtn) installBtn.style.display = 'inline-block';
+});
+
+async function installApp() {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  document.getElementById('install-btn').style.display = 'none';
+}
 </script>
 </body>
 </html>

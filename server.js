@@ -305,7 +305,7 @@ app.post('/api/checkout', async (req, res) => {
       customerIp: req.ip,
       notifyUrl: `${BASE_URL}/payu/notificare`,
       continueUrl: `${BASE_URL}/raspunde.html?order=${orderId}`,
-      
+
     });
 
     if (payuOrderId) {
@@ -502,6 +502,62 @@ app.post('/api/vanzator/login', async (req, res) => {
   if (!ok) return res.status(401).json({ error: 'Email sau parola gresita.' });
   setSellerCookie(res, seller.id);
   res.json({ ok: true });
+});
+
+// Recuperare parola: vanzatorul primeste pe email un link cu un token
+// aleatoriu, valabil 1 ora, cu care isi poate seta o parola noua.
+app.post('/api/vanzator/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    const seller = getSellerByEmail(email || '');
+    // Raspuns identic indiferent daca emailul exista, ca sa nu se poata
+    // deduce ce conturi sunt inregistrate pe platforma.
+    if (seller) {
+      const token = crypto.randomBytes(32).toString('hex');
+      const expires = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      db.prepare('UPDATE sellers SET reset_token = ?, reset_token_expires = ? WHERE id = ?')
+        .run(token, expires, seller.id);
+      if (mailer) {
+        const link = `${BASE_URL}/vanzator/reset-parola.html?token=${token}`;
+        mailer
+          .sendEmail({
+            to: seller.email,
+            subject: 'Resetare parola cont vanzator',
+            html: `
+              <p>Salut ${escapeHtml(seller.name)},</p>
+              <p>Am primit o cerere de resetare a parolei pentru contul tau de vanzator.</p>
+              <p><a href="${link}">Apasa aici ca sa-ti setezi o parola noua</a></p>
+              <p>Linkul este valabil 1 ora. Daca nu ai cerut tu resetarea, poti ignora acest email.</p>
+            `,
+          })
+          .catch((err) => console.error('Nu am putut trimite emailul de resetare parola:', err.message));
+      }
+    }
+    res.json({ ok: true, message: 'Daca exista un cont cu acest email, vei primi un link de resetare.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Eroare la cererea de resetare.' });
+  }
+});
+
+app.post('/api/vanzator/reset-password', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password || password.length < 8) {
+      return res.status(400).json({ error: 'Token invalid sau parola prea scurta (minim 8 caractere).' });
+    }
+    const seller = db.prepare('SELECT * FROM sellers WHERE reset_token = ?').get(token);
+    if (!seller || !seller.reset_token_expires || new Date(seller.reset_token_expires) < new Date()) {
+      return res.status(400).json({ error: 'Linkul de resetare este invalid sau a expirat. Cere unul nou.' });
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    db.prepare('UPDATE sellers SET password_hash = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?')
+      .run(passwordHash, seller.id);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Eroare la resetarea parolei.' });
+  }
 });
 
 app.post('/api/vanzator/logout', (req, res) => {

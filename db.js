@@ -12,6 +12,8 @@ db.exec(`
     password_hash TEXT NOT NULL,
     payu_ext_customer_id TEXT,
     payu_verified INTEGER NOT NULL DEFAULT 0,
+    reset_token TEXT,
+    reset_token_expires TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -72,6 +74,16 @@ db.exec(`
 const orderColumns = db.prepare('PRAGMA table_info(orders)').all().map((c) => c.name);
 if (!orderColumns.includes('buyer_email')) {
   db.exec('ALTER TABLE orders ADD COLUMN buyer_email TEXT');
+}
+
+// Migratie usoara: adauga coloanele pentru resetarea parolei vanzatorului,
+// pentru bazele de date create inainte de a exista aceasta functie.
+const sellerColumns = db.prepare('PRAGMA table_info(sellers)').all().map((c) => c.name);
+if (!sellerColumns.includes('reset_token')) {
+  db.exec('ALTER TABLE sellers ADD COLUMN reset_token TEXT');
+}
+if (!sellerColumns.includes('reset_token_expires')) {
+  db.exec('ALTER TABLE sellers ADD COLUMN reset_token_expires TEXT');
 }
 
 module.exports = db;

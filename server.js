@@ -15,7 +15,7 @@ const { makePayU } = require('./lib/payu');
 const { makeMailer, escapeHtml } = require('./lib/mailer');
 const { generateQuestion } = require('./lib/questionGenerator');
 const { renderTicketSvg } = require('./lib/ticketImage');
-const { streamTicketsPdf } = require('./lib/ticketPdf'); const { makeWhatsapp } = require('./lib/whatsapp');
+const { streamTicketsPdf } = require('./lib/ticketPdf'); const { makeWhatsapp } = require('./lib/whatsapp'); const { makePush } = require('./lib/push');
 
 const app = express();
 
@@ -48,9 +48,9 @@ const payu = payuConfigured
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const RESEND_FROM = process.env.RESEND_FROM || 'onboarding@resend.dev';
-const mailer = makeMailer({ apiKey: RESEND_API_KEY, from: RESEND_FROM }); const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || ''; const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || ''; const TWILIO_WHATSAPP_FROM = process.env.TWILIO_WHATSAPP_FROM || ''; const TWILIO_CONTENT_SID = process.env.TWILIO_CONTENT_SID || ''; const whatsappConfigured = !!(TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_WHATSAPP_FROM && TWILIO_CONTENT_SID); const whatsapp = whatsappConfigured ? makeWhatsapp({ accountSid: TWILIO_ACCOUNT_SID, authToken: TWILIO_AUTH_TOKEN, from: TWILIO_WHATSAPP_FROM, contentSid: TWILIO_CONTENT_SID }) : null;
+const mailer = makeMailer({ apiKey: RESEND_API_KEY, from: RESEND_FROM }); const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || ''; const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || ''; const TWILIO_WHATSAPP_FROM = process.env.TWILIO_WHATSAPP_FROM || ''; const TWILIO_CONTENT_SID = process.env.TWILIO_CONTENT_SID || ''; const whatsappConfigured = !!(TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_WHATSAPP_FROM && TWILIO_CONTENT_SID); const whatsapp = whatsappConfigured ? makeWhatsapp({ accountSid: TWILIO_ACCOUNT_SID, authToken: TWILIO_AUTH_TOKEN, from: TWILIO_WHATSAPP_FROM, contentSid: TWILIO_CONTENT_SID }) : null; const PUSH_VAPID_PUBLIC_KEY = process.env.PUSH_VAPID_PUBLIC_KEY || ''; const PUSH_VAPID_PRIVATE_KEY = process.env.PUSH_VAPID_PRIVATE_KEY || ''; const PUSH_VAPID_SUBJECT = process.env.PUSH_VAPID_SUBJECT || 'mailto:aromaprodcom@gmail.com'; const pushConfigured = !!(PUSH_VAPID_PUBLIC_KEY && PUSH_VAPID_PRIVATE_KEY); const push = pushConfigured ? makePush({ publicKey: PUSH_VAPID_PUBLIC_KEY, privateKey: PUSH_VAPID_PRIVATE_KEY, subject: PUSH_VAPID_SUBJECT }) : null;
 
-const upload = makeImageUploader(); function getNotificationPhones() { const subs = db.prepare('SELECT phone FROM subscribers').all().map((r) => r.phone); const buyers = db.prepare("SELECT DISTINCT buyer_phone as phone FROM orders WHERE buyer_phone IS NOT NULL AND status IN ('paid','locked','unlocked')").all().map((r) => r.phone); return [...new Set([...subs, ...buyers].filter(Boolean))]; } async function notifyNewProduct(product) { if (!whatsapp) return; const phones = getNotificationPhones(); const priceText = (product.price_bani / 100).toFixed(2) + ' RON'; const link = BASE_URL + '/'; for (const phone of phones) { try { await whatsapp.sendTemplate(phone, [product.name, priceText, link]); } catch (err) { console.error('Nu am putut trimite WhatsApp catre ' + phone + ':', err.message); } } }
+const upload = makeImageUploader(); function getNotificationPhones() { const subs = db.prepare('SELECT phone FROM subscribers').all().map((r) => r.phone); const buyers = db.prepare("SELECT DISTINCT buyer_phone as phone FROM orders WHERE buyer_phone IS NOT NULL AND status IN ('paid','locked','unlocked')").all().map((r) => r.phone); return [...new Set([...subs, ...buyers].filter(Boolean))]; } async function notifyNewProduct(product) { if (!whatsapp) return; const phones = getNotificationPhones(); const priceText = (product.price_bani / 100).toFixed(2) + ' RON'; const link = BASE_URL + '/'; for (const phone of phones) { try { await whatsapp.sendTemplate(phone, [product.name, priceText, link]); } catch (err) { console.error('Nu am putut trimite WhatsApp catre ' + phone + ':', err.message); } } } async function notifyPushSubscribers(product) { if (!push) return; const subs = db.prepare('SELECT * FROM push_subscriptions').all(); const priceText = (product.price_bani / 100).toFixed(2) + ' RON'; const payload = { title: 'Produs nou: ' + product.name, body: priceText + ' - stoc limitat!', url: BASE_URL + '/' }; for (const sub of subs) { try { await push.sendToSubscription(sub, payload); } catch (err) { if (err.statusCode === 404 || err.statusCode === 410) { db.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(sub.id); } else { console.error('Nu am putut trimite push catre ' + sub.id + ':', err.message); } } } }
 
 // ---------------------------------------------------------------------------
 // Notificare PayU - body RAW (necesar pentru verificarea semnaturii), definit
@@ -87,7 +87,7 @@ app.post('/payu/notificare', express.raw({ type: '*/*' }), (req, res) => {
   }
 });
 
-app.use(express.json()); app.post('/api/abonare', (req, res) => { const digits = req.body && req.body.phone ? String(req.body.phone).replace(/\D/g, '') : ''; if (!digits || digits.length < 9) { return res.status(400).json({ error: 'Un numar de telefon valid este obligatoriu.' }); } try { db.prepare('INSERT OR IGNORE INTO subscribers (id, phone) VALUES (?, ?)').run(uuidv4(), String(req.body.phone).trim()); res.json({ ok: true }); } catch (err) { console.error(err); res.status(500).json({ error: 'Eroare la abonare.' }); } });
+app.use(express.json()); app.post('/api/abonare', (req, res) => { const digits = req.body && req.body.phone ? String(req.body.phone).replace(/\D/g, '') : ''; if (!digits || digits.length < 9) { return res.status(400).json({ error: 'Un numar de telefon valid este obligatoriu.' }); } try { db.prepare('INSERT OR IGNORE INTO subscribers (id, phone) VALUES (?, ?)').run(uuidv4(), String(req.body.phone).trim()); res.json({ ok: true }); } catch (err) { console.error(err); res.status(500).json({ error: 'Eroare la abonare.' }); } }); app.get('/api/push/public-key', (req, res) => { res.json({ publicKey: pushConfigured ? PUSH_VAPID_PUBLIC_KEY : null }); }); app.post('/api/push/subscribe', (req, res) => { const sub = req.body; if (!sub || !sub.endpoint || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) { return res.status(400).json({ error: 'Abonament push invalid.' }); } try { db.prepare('INSERT INTO push_subscriptions (id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth').run(uuidv4(), sub.endpoint, sub.keys.p256dh, sub.keys.auth); res.json({ ok: true }); } catch (err) { console.error(err); res.status(500).json({ error: 'Eroare la abonare push.' }); } });
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads/images', express.static(IMAGES_DIR));
@@ -596,7 +596,7 @@ app.post(
         stockTotal
       );
 
-      res.json({ ok: true, productId }); notifyNewProduct({ name, price_bani: Math.round(parseFloat(priceRon) * 100) }).catch((err) => console.error('Eroare la trimiterea notificarilor WhatsApp:', err.message));
+      res.json({ ok: true, productId }); notifyNewProduct({ name, price_bani: Math.round(parseFloat(priceRon) * 100) }).catch((err) => console.error('Eroare la trimiterea notificarilor WhatsApp:', err.message)); notifyPushSubscribers({ name, price_bani: Math.round(parseFloat(priceRon) * 100) }).catch((err) => console.error('Eroare la trimiterea notificarilor push:', err.message));
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: 'Eroare la salvarea produsului.' });

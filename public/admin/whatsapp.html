@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Admin - mesaje WhatsApp</title>
+<link rel="stylesheet" href="/style.css" />
+<style>
+  .top-bar { max-width:900px; margin: 0 auto; padding: 16px 24px 0; display:flex; justify-content:space-between; align-items:center; gap:12px; }
+  .top-bar button { width:auto; padding:6px 14px; font-size:0.85rem; }
+  .top-bar .nav-links { display:flex; align-items:center; gap:16px; }
+  .top-bar .nav-links a { color:#6c8cff; font-size:0.9rem; }
+  main { max-width: 900px; }
+  .msg-list { display:flex; flex-direction:column; gap:10px; margin-top:10px; }
+  .msg-item { padding: 12px 14px; border:1px solid #2a2e38; border-radius:10px; background:#161a23; }
+  .msg-item .phone { font-weight:600; color:#e8eaed; }
+  .msg-item .time { color:#9aa0ab; font-size:0.78rem; float:right; }
+  .msg-item .body { margin-top:6px; color:#c7cad1; white-space:pre-wrap; }
+</style>
+</head>
+<body>
+<div class="top-bar">
+  <strong>Mesaje WhatsApp primite</strong>
+  <div class="nav-links">
+    <a href="/admin/comenzi.html">&larr; Comenzi</a>
+    <button id="logout-btn">Delogare</button>
+  </div>
+</div>
+<header>
+  <h1>Mesaje WhatsApp</h1>
+  <p>Raspunsurile clientilor la notificarile automate de produs nou (ultimele 300). Pagina se reincarca automat la fiecare 20 secunde.</p>
+</header>
+<main>
+  <div id="content" class="question-card">Se incarca...</div>
+</main>
+
+<script src="/common.js"></script>
+<script>
+async function load() {
+  const res = await fetch('/api/admin/whatsapp-mesaje');
+  if (res.status === 401) { location.href = '/admin/login.html'; return; }
+  const messages = await res.json();
+  const el = document.getElementById('content');
+  if (!messages.length) {
+    el.innerHTML = '<p style="color:#9aa0ab;">Nu a fost primit inca niciun mesaj.</p>';
+    return;
+  }
+  el.innerHTML = `
+    <div class="msg-list">
+      ${messages.map((m) => `
+        <div class="msg-item">
+          <span class="time">${new Date(m.receivedAt + 'Z').toLocaleString('ro-RO')}</span>
+          <span class="phone">+${escapeHtml(m.fromPhone)}</span>
+          <div class="body">${escapeHtml(m.body)}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  await fetch('/api/admin/logout', { method: 'POST' });
+  location.href = '/admin/login.html';
+});
+
+load();
+setInterval(load, 20000);
+</script>
+</body>
+</html>

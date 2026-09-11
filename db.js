@@ -111,4 +111,17 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_received ON whatsapp_messages(received_at);
 `);
 
+// Tabel separat pentru abonamentele push ale adminului (device-urile pe care
+// s-a instalat "aplicatia" de mesaje WhatsApp si s-au activat notificarile),
+// distinct de push_subscriptions care e pentru clientii abonati la produse noi.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS admin_push_subscriptions (
+    id TEXT PRIMARY KEY,
+    endpoint TEXT NOT NULL UNIQUE,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
 module.exports = db;

@@ -81,7 +81,34 @@ async function createInvoiceForOrder(order) {
   }
 }
 
-const upload = makeImageUploader(); function getNotificationPhones() { const subs = db.prepare('SELECT phone FROM subscribers').all().map((r) => r.phone); const buyers = db.prepare("SELECT DISTINCT buyer_phone as phone FROM orders WHERE buyer_phone IS NOT NULL AND status IN ('paid','locked','unlocked')").all().map((r) => r.phone); return [...new Set([...subs, ...buyers].filter(Boolean))]; } async function notifyNewProduct(product) { if (!whatsapp) return; const phones = getNotificationPhones(); const priceText = (product.price_bani / 100).toFixed(2) + ' RON'; const link = BASE_URL + '/'; for (const phone of phones) { try { await whatsapp.sendTemplate(phone, [product.name, priceText, link]); } catch (err) { console.error('Nu am putut trimite WhatsApp catre ' + phone + ':', err.message); } } } async function notifyPushSubscribers(product) { if (!push) return; const subs = db.prepare('SELECT * FROM push_subscriptions').all(); const priceText = (product.price_bani / 100).toFixed(2) + ' RON'; const payload = { title: 'Produs nou: ' + product.name, body: priceText + ' - stoc limitat!', url: BASE_URL + '/' }; for (const sub of subs) { try { await push.sendToSubscription(sub, payload); } catch (err) { if (err.statusCode === 404 || err.statusCode === 410) { db.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(sub.id); } else { console.error('Nu am putut trimite push catre ' + sub.id + ':', err.message); } } } }
+const upload = makeImageUploader();
+
+// Trimite o notificare push (ca de aplicatie, pe telefon) catre adminul care
+// a instalat panoul de mesaje WhatsApp si a activat notificarile, de fiecare
+// data cand soseste un mesaj nou de la un client.
+async function notifyAdminNewWhatsappMessage(fromPhone, body) {
+  if (!push) return;
+  const subs = db.prepare('SELECT * FROM admin_push_subscriptions').all();
+  if (!subs.length) return;
+  const payload = {
+    title: 'Mesaj WhatsApp nou',
+    body: '+' + fromPhone + ': ' + String(body || '').slice(0, 120),
+    url: BASE_URL + '/admin/whatsapp.html',
+  };
+  for (const sub of subs) {
+    try {
+      await push.sendToSubscription(sub, payload);
+    } catch (err) {
+      if (err.statusCode === 404 || err.statusCode === 410) {
+        db.prepare('DELETE FROM admin_push_subscriptions WHERE id = ?').run(sub.id);
+      } else {
+        console.error('Nu am putut trimite push admin catre ' + sub.id + ':', err.message);
+      }
+    }
+  }
+}
+
+function getNotificationPhones() { const subs = db.prepare('SELECT phone FROM subscribers').all().map((r) => r.phone); const buyers = db.prepare("SELECT DISTINCT buyer_phone as phone FROM orders WHERE buyer_phone IS NOT NULL AND status IN ('paid','locked','unlocked')").all().map((r) => r.phone); return [...new Set([...subs, ...buyers].filter(Boolean))]; } async function notifyNewProduct(product) { if (!whatsapp) return; const phones = getNotificationPhones(); const priceText = (product.price_bani / 100).toFixed(2) + ' RON'; const link = BASE_URL + '/'; for (const phone of phones) { try { await whatsapp.sendTemplate(phone, [product.name, priceText, link]); } catch (err) { console.error('Nu am putut trimite WhatsApp catre ' + phone + ':', err.message); } } } async function notifyPushSubscribers(product) { if (!push) return; const subs = db.prepare('SELECT * FROM push_subscriptions').all(); const priceText = (product.price_bani / 100).toFixed(2) + ' RON'; const payload = { title: 'Produs nou: ' + product.name, body: priceText + ' - stoc limitat!', url: BASE_URL + '/' }; for (const sub of subs) { try { await push.sendToSubscription(sub, payload); } catch (err) { if (err.statusCode === 404 || err.statusCode === 410) { db.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(sub.id); } else { console.error('Nu am putut trimite push catre ' + sub.id + ':', err.message); } } } }
 
 // ---------------------------------------------------------------------------
 // Notificare PayU - body RAW (necesar pentru verificarea semnaturii), definit
@@ -811,8 +838,11 @@ app.post('/api/whatsapp/webhook', (req, res) => {
           if (msg.text && msg.text.body) body = msg.text.body;
           else if (msg.button && msg.button.text) body = msg.button.text;
           else if (msg.type) body = `[mesaj de tip ${msg.type}]`;
-          db.prepare('INSERT OR IGNORE INTO whatsapp_messages (id, wa_message_id, from_phone, body) VALUES (?, ?, ?, ?)')
+          const insertInfo = db.prepare('INSERT OR IGNORE INTO whatsapp_messages (id, wa_message_id, from_phone, body) VALUES (?, ?, ?, ?)')
             .run(uuidv4(), msg.id || null, from, body);
+          if (insertInfo.changes > 0) {
+            notifyAdminNewWhatsappMessage(from, body).catch((err) => console.error('Eroare la trimiterea push-ului de admin:', err.message));
+          }
         }
       }
     }
@@ -821,6 +851,21 @@ app.post('/api/whatsapp/webhook', (req, res) => {
   }
   // Meta cere intotdeauna raspuns 200 rapid, altfel reincearca trimiterea.
   res.sendStatus(200);
+});
+
+app.post('/api/admin/push-subscribe', requireAdmin, (req, res) => {
+  const sub = req.body;
+  if (!sub || !sub.endpoint || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) {
+    return res.status(400).json({ error: 'Abonament push invalid.' });
+  }
+  try {
+    db.prepare('INSERT INTO admin_push_subscriptions (id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth')
+      .run(uuidv4(), sub.endpoint, sub.keys.p256dh, sub.keys.auth);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Eroare la abonare push pentru admin.' });
+  }
 });
 
 app.get('/api/admin/whatsapp-mesaje', requireAdmin, (req, res) => {

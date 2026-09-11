@@ -17,11 +17,18 @@
   .top-bar .nav-links { display:flex; align-items:center; gap:16px; }
   .top-bar .nav-links a { color:#6c8cff; font-size:0.9rem; }
   main { max-width: 900px; }
-  .msg-list { display:flex; flex-direction:column; gap:10px; margin-top:10px; }
-  .msg-item { padding: 12px 14px; border:1px solid #2a2e38; border-radius:10px; background:#161a23; }
-  .msg-item .phone { font-weight:600; color:#e8eaed; }
-  .msg-item .time { color:#9aa0ab; font-size:0.78rem; float:right; }
-  .msg-item .body { margin-top:6px; color:#c7cad1; white-space:pre-wrap; }
+  .conv { border:1px solid #2a2e38; border-radius:10px; background:#161a23; margin-bottom:16px; overflow:hidden; }
+  .conv-header { padding:10px 14px; font-weight:600; color:#e8eaed; border-bottom:1px solid #2a2e38; }
+  .conv-messages { padding:12px 14px; display:flex; flex-direction:column; gap:8px; max-height:340px; overflow-y:auto; }
+  .bubble { max-width:80%; padding:8px 12px; border-radius:10px; font-size:0.88rem; }
+  .bubble .text { white-space:pre-wrap; }
+  .bubble .time { display:block; font-size:0.7rem; color:#9aa0ab; margin-top:4px; }
+  .bubble.in { align-self:flex-start; background:#1c2333; color:#c7cad1; }
+  .bubble.out { align-self:flex-end; background:#1e3d2b; color:#d7ffe6; }
+  .reply-form { display:flex; gap:8px; padding:10px 14px; border-top:1px solid #2a2e38; }
+  .reply-form textarea { flex:1; resize:vertical; min-height:38px; padding:8px 10px; border-radius:8px; border:1px solid #2a2e38; background:#10131a; color:#e8eaed; font-size:0.88rem; font-family:inherit; }
+  .reply-form button { width:auto; padding:8px 16px; align-self:flex-end; }
+  .reply-feedback { font-size:0.78rem; padding:0 14px 8px; min-height:1em; }
 </style>
 </head>
 <body>
@@ -34,7 +41,7 @@
 </div>
 <header>
   <h1>Mesaje WhatsApp</h1>
-  <p>Raspunsurile clientilor la notificarile automate de produs nou (ultimele 300). Pagina se reincarca automat la fiecare 20 secunde.</p>
+  <p>Conversatiile cu clientii (ultimele 500 de mesaje) - poti raspunde direct de aici. Pagina se reincarca automat la fiecare 20 secunde. Un mesaj text liber poate fi trimis doar in primele 24h de la ultimul mesaj primit de la acel client; dupa aceea e nevoie de un sablon aprobat.</p>
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
     <button id="push-btn" type="button" onclick="enableAdminPush()" style="width:auto;padding:10px 16px;">Activeaza notificari pe telefon</button>
     <button id="install-btn" type="button" onclick="installApp()" style="display:none;width:auto;padding:10px 16px;">Instaleaza aplicatia</button>
@@ -56,17 +63,69 @@ async function load() {
     el.innerHTML = '<p style="color:#9aa0ab;">Nu a fost primit inca niciun mesaj.</p>';
     return;
   }
-  el.innerHTML = `
-    <div class="msg-list">
-      ${messages.map((m) => `
-        <div class="msg-item">
-          <span class="time">${new Date(m.receivedAt + 'Z').toLocaleString('ro-RO')}</span>
-          <span class="phone">+${escapeHtml(m.fromPhone)}</span>
-          <div class="body">${escapeHtml(m.body)}</div>
-        </div>
-      `).join('')}
+
+  const byPhone = new Map();
+  for (const m of messages) {
+    if (!byPhone.has(m.fromPhone)) byPhone.set(m.fromPhone, []);
+    byPhone.get(m.fromPhone).push(m);
+  }
+  const threads = Array.from(byPhone.entries()).map(([phone, msgs]) => {
+    msgs.sort((a, b) => new Date(a.receivedAt) - new Date(b.receivedAt));
+    return { phone, msgs, lastAt: msgs[msgs.length - 1].receivedAt };
+  });
+  threads.sort((a, b) => new Date(b.lastAt) - new Date(a.lastAt));
+
+  el.innerHTML = threads.map((t) => `
+    <div class="conv">
+      <div class="conv-header">+${escapeHtml(t.phone)}</div>
+      <div class="conv-messages">
+        ${t.msgs.map((m) => `
+          <div class="bubble ${m.direction === 'out' ? 'out' : 'in'}">
+            <span class="text">${escapeHtml(m.body)}</span>
+            <span class="time">${new Date(m.receivedAt + 'Z').toLocaleString('ro-RO')}</span>
+          </div>
+        `).join('')}
+      </div>
+      <form class="reply-form" onsubmit="return sendReply(event, '${escapeHtml(t.phone)}')">
+        <textarea placeholder="Scrie un raspuns..." required></textarea>
+        <button type="submit">Trimite</button>
+      </form>
+      <div class="reply-feedback" id="fb-${escapeHtml(t.phone)}"></div>
     </div>
-  `;
+  `).join('');
+}
+
+async function sendReply(event, phone) {
+  event.preventDefault();
+  const form = event.target;
+  const textarea = form.querySelector('textarea');
+  const btn = form.querySelector('button');
+  const fb = document.getElementById('fb-' + phone);
+  const text = textarea.value.trim();
+  if (!text) return false;
+  btn.disabled = true;
+  fb.textContent = '';
+  try {
+    const res = await fetch('/api/admin/whatsapp-trimite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ toPhone: phone, body: text }),
+    });
+    if (res.status === 401) { location.href = '/admin/login.html'; return false; }
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      fb.textContent = data.error || 'Eroare la trimitere.';
+      fb.style.color = '#ff8080';
+      btn.disabled = false;
+      return false;
+    }
+    await load();
+  } catch (err) {
+    fb.textContent = 'Eroare de retea. Incearca din nou.';
+    fb.style.color = '#ff8080';
+    btn.disabled = false;
+  }
+  return false;
 }
 
 document.getElementById('logout-btn').addEventListener('click', async () => {

@@ -86,4 +86,16 @@ if (!sellerColumns.includes('reset_token_expires')) {
   db.exec('ALTER TABLE sellers ADD COLUMN reset_token_expires TEXT');
 }
 
+// Migratie usoara: adauga coloanele pentru factura emisa automat (Oblio),
+// pentru bazele de date create inainte de a exista facturarea automata.
+if (!orderColumns.includes('invoice_series')) {
+  db.exec('ALTER TABLE orders ADD COLUMN invoice_series TEXT');
+}
+if (!orderColumns.includes('invoice_number')) {
+  db.exec('ALTER TABLE orders ADD COLUMN invoice_number TEXT');
+}
+if (!orderColumns.includes('invoice_link')) {
+  db.exec('ALTER TABLE orders ADD COLUMN invoice_link TEXT');
+}
+
 module.exports = db;

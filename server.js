@@ -16,6 +16,7 @@ const { makeMailer, escapeHtml } = require('./lib/mailer');
 const { generateQuestion } = require('./lib/questionGenerator');
 const { renderTicketSvg } = require('./lib/ticketImage');
 const { streamTicketsPdf } = require('./lib/ticketPdf'); const { makeWhatsapp } = require('./lib/whatsapp'); const { makePush } = require('./lib/push');
+const { makeOblio } = require('./lib/oblio');
 
 const app = express();
 
@@ -49,6 +50,36 @@ const payu = payuConfigured
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const RESEND_FROM = process.env.RESEND_FROM || 'onboarding@resend.dev';
 const mailer = makeMailer({ apiKey: RESEND_API_KEY, from: RESEND_FROM }); const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || ''; const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || ''; const TWILIO_WHATSAPP_FROM = process.env.TWILIO_WHATSAPP_FROM || ''; const TWILIO_CONTENT_SID = process.env.TWILIO_CONTENT_SID || ''; const whatsappConfigured = !!(TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_WHATSAPP_FROM && TWILIO_CONTENT_SID); const whatsapp = whatsappConfigured ? makeWhatsapp({ accountSid: TWILIO_ACCOUNT_SID, authToken: TWILIO_AUTH_TOKEN, from: TWILIO_WHATSAPP_FROM, contentSid: TWILIO_CONTENT_SID }) : null; const PUSH_VAPID_PUBLIC_KEY = process.env.PUSH_VAPID_PUBLIC_KEY || ''; const PUSH_VAPID_PRIVATE_KEY = process.env.PUSH_VAPID_PRIVATE_KEY || ''; const PUSH_VAPID_SUBJECT = process.env.PUSH_VAPID_SUBJECT || 'mailto:aromaprodcom@gmail.com'; const pushConfigured = !!(PUSH_VAPID_PUBLIC_KEY && PUSH_VAPID_PRIVATE_KEY); const push = pushConfigured ? makePush({ publicKey: PUSH_VAPID_PUBLIC_KEY, privateKey: PUSH_VAPID_PRIVATE_KEY, subject: PUSH_VAPID_SUBJECT }) : null;
+
+const OBLIO_EMAIL = process.env.OBLIO_EMAIL || '';
+const OBLIO_SECRET = process.env.OBLIO_SECRET || '';
+const OBLIO_CIF = process.env.OBLIO_CIF || '';
+const OBLIO_SERIES = process.env.OBLIO_SERIES || '';
+const oblioConfigured = !!(OBLIO_EMAIL && OBLIO_SECRET && OBLIO_CIF && OBLIO_SERIES);
+const oblio = oblioConfigured
+  ? makeOblio({ email: OBLIO_EMAIL, secret: OBLIO_SECRET, cif: OBLIO_CIF, seriesName: OBLIO_SERIES })
+  : null;
+
+async function createInvoiceForOrder(order) {
+  if (!oblio) return;
+  try {
+    const product = getProduct(order.product_id);
+    if (!product) return;
+    const invoice = await oblio.createInvoice({
+      buyerName: order.buyer_name,
+      buyerEmail: order.buyer_email,
+      buyerPhone: order.buyer_phone,
+      productName: product.name,
+      priceRon: product.price_bani / 100,
+      quantity: order.quantity,
+      orderId: order.id,
+    });
+    db.prepare('UPDATE orders SET invoice_series = ?, invoice_number = ?, invoice_link = ? WHERE id = ?')
+      .run(invoice.seriesName || null, invoice.number || null, invoice.link || null, order.id);
+  } catch (err) {
+    console.error('Nu am putut emite factura Oblio pentru comanda ' + order.id + ':', err.message);
+  }
+}
 
 const upload = makeImageUploader(); function getNotificationPhones() { const subs = db.prepare('SELECT phone FROM subscribers').all().map((r) => r.phone); const buyers = db.prepare("SELECT DISTINCT buyer_phone as phone FROM orders WHERE buyer_phone IS NOT NULL AND status IN ('paid','locked','unlocked')").all().map((r) => r.phone); return [...new Set([...subs, ...buyers].filter(Boolean))]; } async function notifyNewProduct(product) { if (!whatsapp) return; const phones = getNotificationPhones(); const priceText = (product.price_bani / 100).toFixed(2) + ' RON'; const link = BASE_URL + '/'; for (const phone of phones) { try { await whatsapp.sendTemplate(phone, [product.name, priceText, link]); } catch (err) { console.error('Nu am putut trimite WhatsApp catre ' + phone + ':', err.message); } } } async function notifyPushSubscribers(product) { if (!push) return; const subs = db.prepare('SELECT * FROM push_subscriptions').all(); const priceText = (product.price_bani / 100).toFixed(2) + ' RON'; const payload = { title: 'Produs nou: ' + product.name, body: priceText + ' - stoc limitat!', url: BASE_URL + '/' }; for (const sub of subs) { try { await push.sendToSubscription(sub, payload); } catch (err) { if (err.statusCode === 404 || err.statusCode === 410) { db.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(sub.id); } else { console.error('Nu am putut trimite push catre ' + sub.id + ':', err.message); } } } }
 
@@ -187,6 +218,7 @@ function markOrderPaid(orderId, payuOrderId) {
   }
   assignTickets(db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId));
   sendOrderConfirmationEmail(order);
+  createInvoiceForOrder(order).catch((err) => console.error('Eroare la emiterea facturii:', err.message));
 }
 
 // Trimite (best-effort, nu blocheaza fluxul de plata daca esueaza) un email
@@ -352,6 +384,7 @@ app.get('/api/order/:id', async (req, res) => {
       downloadUrl: `${BASE_URL}/descarca/${order.download_token}`,
       tickets,
       quantity: order.quantity,
+      invoiceLink: order.invoice_link || null,
     });
   }
   if (order.status === 'locked') {
@@ -388,7 +421,11 @@ app.post('/api/answer', (req, res) => {
   if (correct) {
     const token = crypto.randomBytes(24).toString('hex');
     db.prepare(`UPDATE orders SET unlocked = 1, status = 'unlocked', download_token = ? WHERE id = ?`).run(token, orderId);
-    return res.json({ correct: true, downloadUrl: `${BASE_URL}/descarca/${token}` });
+    return res.json({
+      correct: true,
+      downloadUrl: `${BASE_URL}/descarca/${token}`,
+      invoiceLink: order.invoice_link || null,
+    });
   }
 
   const attemptsLeft = order.attempts_left - 1;
@@ -689,6 +726,8 @@ app.get('/api/vanzator/comenzi', requireSeller, (req, res) => {
       amountBani: o.amount_bani,
       tickets: orderTicketNumbers(o.id),
       createdAt: o.created_at,
+      invoiceLink: o.invoice_link || null,
+      invoiceNumber: o.invoice_number || null,
     }))
   );
 });
@@ -738,6 +777,8 @@ app.get('/api/admin/comenzi', requireAdmin, (req, res) => {
       platformFeeBani: o.platform_fee_bani,
       tickets: orderTicketNumbers(o.id),
       createdAt: o.created_at,
+      invoiceLink: o.invoice_link || null,
+      invoiceNumber: o.invoice_number || null,
     }))
   );
 });
@@ -746,4 +787,5 @@ app.listen(PORT, () => {
   console.log(`Serverul ruleaza pe ${BASE_URL} (port ${PORT})`);
   if (!payu) console.warn('ATENTIE: variabilele PAYU_* lipsesc din .env - platile prin PayU nu vor functiona.');
   if (!ADMIN_PASSWORD) console.warn('ATENTIE: ADMIN_PASSWORD lipseste din .env - panoul de admin este dezactivat.');
+  if (!oblio) console.warn('ATENTIE: variabilele OBLIO_* lipsesc din .env - facturarea automata este dezactivata.');
 });

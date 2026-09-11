@@ -15,7 +15,7 @@ const { makePayU } = require('./lib/payu');
 const { makeMailer, escapeHtml } = require('./lib/mailer');
 const { generateQuestion } = require('./lib/questionGenerator');
 const { renderTicketSvg } = require('./lib/ticketImage');
-const { streamTicketsPdf } = require('./lib/ticketPdf'); const { makeWhatsapp } = require('./lib/whatsapp'); const { makePush } = require('./lib/push');
+const { streamTicketsPdf } = require('./lib/ticketPdf'); const { makeWhatsapp, normalizePhone } = require('./lib/whatsapp'); const { makePush } = require('./lib/push');
 const { makeOblio } = require('./lib/oblio');
 
 const app = express();
@@ -869,15 +869,40 @@ app.post('/api/admin/push-subscribe', requireAdmin, (req, res) => {
 });
 
 app.get('/api/admin/whatsapp-mesaje', requireAdmin, (req, res) => {
-  const rows = db.prepare('SELECT * FROM whatsapp_messages ORDER BY received_at DESC LIMIT 300').all();
+  const rows = db.prepare('SELECT * FROM whatsapp_messages ORDER BY received_at DESC LIMIT 500').all();
   res.json(
     rows.map((m) => ({
       id: m.id,
       fromPhone: m.from_phone,
       body: m.body,
       receivedAt: m.received_at,
+      direction: m.direction || 'in',
     }))
   );
+});
+
+// Trimite un raspuns manual catre un client, din panoul de admin. Functioneaza
+// doar daca WhatsApp e configurat (variabilele META_WHATSAPP_TOKEN si
+// META_PHONE_NUMBER_ID) si, pentru mesaj text liber, doar in fereastra de 24h
+// de la ultimul mesaj primit de la acel client - vezi lib/whatsapp.js.
+app.post('/api/admin/whatsapp-trimite', requireAdmin, async (req, res) => {
+  if (!whatsapp) {
+    return res.status(500).json({ error: 'WhatsApp nu este configurat (lipsesc variabilele META_WHATSAPP_TOKEN / META_PHONE_NUMBER_ID).' });
+  }
+  const toPhone = req.body && req.body.toPhone;
+  const messageBody = req.body && req.body.body;
+  if (!toPhone || !messageBody || !String(messageBody).trim()) {
+    return res.status(400).json({ error: 'Numarul de telefon si textul mesajului sunt obligatorii.' });
+  }
+  try {
+    await whatsapp.sendText(toPhone, messageBody);
+    db.prepare('INSERT INTO whatsapp_messages (id, wa_message_id, from_phone, body, direction) VALUES (?, ?, ?, ?, ?)')
+      .run(uuidv4(), null, normalizePhone(toPhone), String(messageBody), 'out');
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Eroare la trimiterea mesajului WhatsApp din admin:', err.message);
+    res.status(500).json({ error: 'Nu am putut trimite mesajul. ' + err.message });
+  }
 });
 
 app.listen(PORT, () => {

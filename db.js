@@ -111,6 +111,14 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_received ON whatsapp_messages(received_at);
 `);
 
+// Migratie usoara: adauga coloana direction ('in' = primit de la client,
+// 'out' = trimis de admin ca raspuns), pentru bazele de date create inainte
+// de a exista functia de raspuns manual din panoul de admin.
+const whatsappMessageColumns = db.prepare('PRAGMA table_info(whatsapp_messages)').all().map((c) => c.name);
+if (!whatsappMessageColumns.includes('direction')) {
+  db.exec("ALTER TABLE whatsapp_messages ADD COLUMN direction TEXT NOT NULL DEFAULT 'in'");
+}
+
 // Tabel separat pentru abonamentele push ale adminului (device-urile pe care
 // s-a instalat "aplicatia" de mesaje WhatsApp si s-au activat notificarile),
 // distinct de push_subscriptions care e pentru clientii abonati la produse noi.

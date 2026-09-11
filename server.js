@@ -49,7 +49,7 @@ const payu = payuConfigured
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const RESEND_FROM = process.env.RESEND_FROM || 'onboarding@resend.dev';
-const mailer = makeMailer({ apiKey: RESEND_API_KEY, from: RESEND_FROM }); const META_WHATSAPP_TOKEN = process.env.META_WHATSAPP_TOKEN || ''; const META_PHONE_NUMBER_ID = process.env.META_PHONE_NUMBER_ID || ''; const META_WHATSAPP_TEMPLATE = process.env.META_WHATSAPP_TEMPLATE || 'produs_nou_disponibil'; const META_WHATSAPP_LANG = process.env.META_WHATSAPP_LANG || 'ro'; const whatsappConfigured = !!(META_WHATSAPP_TOKEN && META_PHONE_NUMBER_ID); const whatsapp = whatsappConfigured ? makeWhatsapp({ accessToken: META_WHATSAPP_TOKEN, phoneNumberId: META_PHONE_NUMBER_ID, templateName: META_WHATSAPP_TEMPLATE, languageCode: META_WHATSAPP_LANG }) : null; const PUSH_VAPID_PUBLIC_KEY = process.env.PUSH_VAPID_PUBLIC_KEY || ''; const PUSH_VAPID_PRIVATE_KEY = process.env.PUSH_VAPID_PRIVATE_KEY || ''; const PUSH_VAPID_SUBJECT = process.env.PUSH_VAPID_SUBJECT || 'mailto:aromaprodcom@gmail.com'; const pushConfigured = !!(PUSH_VAPID_PUBLIC_KEY && PUSH_VAPID_PRIVATE_KEY); const push = pushConfigured ? makePush({ publicKey: PUSH_VAPID_PUBLIC_KEY, privateKey: PUSH_VAPID_PRIVATE_KEY, subject: PUSH_VAPID_SUBJECT }) : null;
+const mailer = makeMailer({ apiKey: RESEND_API_KEY, from: RESEND_FROM }); const META_WHATSAPP_TOKEN = process.env.META_WHATSAPP_TOKEN || ''; const META_PHONE_NUMBER_ID = process.env.META_PHONE_NUMBER_ID || ''; const META_WHATSAPP_TEMPLATE = process.env.META_WHATSAPP_TEMPLATE || 'produs_nou_disponibil'; const META_WHATSAPP_LANG = process.env.META_WHATSAPP_LANG || 'ro'; const whatsappConfigured = !!(META_WHATSAPP_TOKEN && META_PHONE_NUMBER_ID); const whatsapp = whatsappConfigured ? makeWhatsapp({ accessToken: META_WHATSAPP_TOKEN, phoneNumberId: META_PHONE_NUMBER_ID, templateName: META_WHATSAPP_TEMPLATE, languageCode: META_WHATSAPP_LANG }) : null; const WHATSAPP_WEBHOOK_VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || ''; const PUSH_VAPID_PUBLIC_KEY = process.env.PUSH_VAPID_PUBLIC_KEY || ''; const PUSH_VAPID_PRIVATE_KEY = process.env.PUSH_VAPID_PRIVATE_KEY || ''; const PUSH_VAPID_SUBJECT = process.env.PUSH_VAPID_SUBJECT || 'mailto:aromaprodcom@gmail.com'; const pushConfigured = !!(PUSH_VAPID_PUBLIC_KEY && PUSH_VAPID_PRIVATE_KEY); const push = pushConfigured ? makePush({ publicKey: PUSH_VAPID_PUBLIC_KEY, privateKey: PUSH_VAPID_PRIVATE_KEY, subject: PUSH_VAPID_SUBJECT }) : null;
 
 const OBLIO_EMAIL = process.env.OBLIO_EMAIL || '';
 const OBLIO_SECRET = process.env.OBLIO_SECRET || '';
@@ -783,10 +783,63 @@ app.get('/api/admin/comenzi', requireAdmin, (req, res) => {
   );
 });
 
+// Webhook Meta pentru WhatsApp: Meta face un GET de verificare o singura
+// data, la configurarea callback-ului in App Dashboard (trebuie sa
+// raspundem cu hub.challenge daca hub.verify_token se potriveste cu
+// WHATSAPP_WEBHOOK_VERIFY_TOKEN). Apoi trimite POST-uri cu evenimente,
+// inclusiv mesajele primite de la clienti.
+app.get('/api/whatsapp/webhook', (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+  if (mode === 'subscribe' && WHATSAPP_WEBHOOK_VERIFY_TOKEN && token === WHATSAPP_WEBHOOK_VERIFY_TOKEN) {
+    return res.status(200).send(challenge);
+  }
+  res.sendStatus(403);
+});
+
+app.post('/api/whatsapp/webhook', (req, res) => {
+  try {
+    const entries = (req.body && req.body.entry) || [];
+    for (const entry of entries) {
+      const changes = entry.changes || [];
+      for (const change of changes) {
+        const messages = (change.value && change.value.messages) || [];
+        for (const msg of messages) {
+          const from = msg.from || '';
+          let body = '[mesaj fara text]';
+          if (msg.text && msg.text.body) body = msg.text.body;
+          else if (msg.button && msg.button.text) body = msg.button.text;
+          else if (msg.type) body = `[mesaj de tip ${msg.type}]`;
+          db.prepare('INSERT OR IGNORE INTO whatsapp_messages (id, wa_message_id, from_phone, body) VALUES (?, ?, ?, ?)')
+            .run(uuidv4(), msg.id || null, from, body);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Eroare la procesarea webhook-ului WhatsApp:', err.message);
+  }
+  // Meta cere intotdeauna raspuns 200 rapid, altfel reincearca trimiterea.
+  res.sendStatus(200);
+});
+
+app.get('/api/admin/whatsapp-mesaje', requireAdmin, (req, res) => {
+  const rows = db.prepare('SELECT * FROM whatsapp_messages ORDER BY received_at DESC LIMIT 300').all();
+  res.json(
+    rows.map((m) => ({
+      id: m.id,
+      fromPhone: m.from_phone,
+      body: m.body,
+      receivedAt: m.received_at,
+    }))
+  );
+});
+
 app.listen(PORT, () => {
   console.log(`Serverul ruleaza pe ${BASE_URL} (port ${PORT})`);
   if (!payu) console.warn('ATENTIE: variabilele PAYU_* lipsesc din .env - platile prin PayU nu vor functiona.');
   if (!ADMIN_PASSWORD) console.warn('ATENTIE: ADMIN_PASSWORD lipseste din .env - panoul de admin este dezactivat.');
   if (!oblio) console.warn('ATENTIE: variabilele OBLIO_* lipsesc din .env - facturarea automata este dezactivata.');
   if (!whatsapp) console.warn('ATENTIE: variabilele META_WHATSAPP_TOKEN / META_PHONE_NUMBER_ID lipsesc din .env - notificarile WhatsApp la produs nou sunt dezactivate.');
+  if (!WHATSAPP_WEBHOOK_VERIFY_TOKEN) console.warn('ATENTIE: WHATSAPP_WEBHOOK_VERIFY_TOKEN lipseste din .env - webhook-ul de primire mesaje WhatsApp nu va putea fi verificat de Meta.');
 });

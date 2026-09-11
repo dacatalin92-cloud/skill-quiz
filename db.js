@@ -98,4 +98,17 @@ if (!orderColumns.includes('invoice_link')) {
   db.exec('ALTER TABLE orders ADD COLUMN invoice_link TEXT');
 }
 
+// Tabel pentru mesajele WhatsApp primite de la clienti (raspunsuri la
+// notificarile automate de produs nou), afisate in panoul de admin.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS whatsapp_messages (
+    id TEXT PRIMARY KEY,
+    wa_message_id TEXT,
+    from_phone TEXT NOT NULL,
+    body TEXT,
+    received_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_received ON whatsapp_messages(received_at);
+`);
+
 module.exports = db;

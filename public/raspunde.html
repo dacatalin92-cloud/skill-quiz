@@ -21,6 +21,7 @@
 </main>
 <footer>
   Ai probleme? Scrie-ne si te ajutam manual.
+  <div id="site-footer"></div>
 </footer>
 
 <script src="/common.js"></script>
@@ -141,7 +142,10 @@ function renderUnlocked(downloadUrl) {
 function renderLocked(message) {
   contentEl.innerHTML = `
     <div class="notice error">${escapeHtml(message || 'Ai epuizat numarul de incercari.')}</div>
-    <p>Ne poti contacta pentru a primi o noua sansa sau o rambursare.</p>
+    <p>Ne poti contacta pentru a primi o noua sansa sau o rambursare, conform
+      <a href="/politica-retur.html" style="color:#6c8cff;">politicii de retur</a>:
+      <a href="mailto:timimaritashow@gmail.com" style="color:#6c8cff;">timimaritashow@gmail.com</a> · 0750 217 934.
+    </p>
   `;
 }
 </script>

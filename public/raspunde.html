@@ -69,7 +69,7 @@ async function poll() {
   renderTickets(data.tickets);
 
   if (data.status === 'unlocked') {
-    renderUnlocked(data.downloadUrl);
+    renderUnlocked(data.downloadUrl, data.invoiceLink);
     return;
   }
   if (data.status === 'locked') {
@@ -117,7 +117,7 @@ async function submitAnswer(event) {
   const data = await res.json();
 
   if (data.correct) {
-    renderUnlocked(data.downloadUrl);
+    renderUnlocked(data.downloadUrl, data.invoiceLink);
     return;
   }
 
@@ -130,11 +130,12 @@ async function submitAnswer(event) {
   }
 }
 
-function renderUnlocked(downloadUrl) {
+function renderUnlocked(downloadUrl, invoiceLink) {
   contentEl.innerHTML = `
     <div class="download-box">
       <div class="notice success">Raspuns corect! Produsul tau digital este gata.</div>
       <a class="button-link" href="${downloadUrl}">Descarca produsul</a>
+      ${invoiceLink ? `<p style="margin-top:12px;"><a href="${invoiceLink}" target="_blank" rel="noopener" style="color:#6c8cff;">Descarca factura</a></p>` : ''}
     </div>
   `;
 }

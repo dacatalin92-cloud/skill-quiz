@@ -47,7 +47,7 @@ async function load() {
   el.innerHTML = `
     <div style="overflow-x:auto;"><table>
       <thead>
-        <tr><th>Data</th><th>Vanzator</th><th>Produs</th><th>Client</th><th>Telefon</th><th>Email</th><th>Cant.</th><th>Numere</th><th>Suma</th><th>Comision</th><th>Status</th></tr>
+        <tr><th>Data</th><th>Vanzator</th><th>Produs</th><th>Client</th><th>Telefon</th><th>Email</th><th>Cant.</th><th>Numere</th><th>Suma</th><th>Comision</th><th>Status</th><th>Factura</th></tr>
       </thead>
       <tbody>
         ${orders.map(o => `
@@ -63,6 +63,7 @@ async function load() {
             <td>${(o.amountBani/100).toFixed(2)} RON</td>
             <td>${(o.platformFeeBani/100).toFixed(2)} RON</td>
             <td><span class="badge ${o.status}">${statusLabels[o.status] || o.status}</span></td>
+            <td>${o.invoiceLink ? `<a href="${o.invoiceLink}" target="_blank" rel="noopener" style="color:#6c8cff;">Vezi</a>` : '-'}</td>
           </tr>
         `).join('')}
       </tbody>

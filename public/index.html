@@ -77,7 +77,7 @@ async function loadProducts() {
           <input type="tel" name="buyerPhone" placeholder="Numar de telefon" required />
           <input type="email" name="buyerEmail" placeholder="Email (optional, pentru confirmare)" />
           <input type="number" name="quantity" min="1" max="${p.stockRemaining}" value="1" required />
-          <button type="submit">Cumpara si intra in concurs</button>
+          <button type="submit">Cumpara</button>
         </form>
       `}
       <a class="participants-link" href="/participanti.html?produs=${p.id}">Vezi lista participantilor &rarr;</a>
@@ -110,12 +110,12 @@ async function startCheckout(event, productId) {
     } else {
       alert(data.error || 'A aparut o eroare. Incearca din nou.');
       button.disabled = false;
-      button.textContent = 'Cumpara si intra in concurs';
+      button.textContent = 'Cumpara';
     }
   } catch (err) {
     alert('A aparut o eroare de retea. Incearca din nou.');
     button.disabled = false;
-    button.textContent = 'Cumpara si intra in concurs';
+    button.textContent = 'Cumpara';
   }
   return false;
 }

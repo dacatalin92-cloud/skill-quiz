@@ -57,7 +57,7 @@ async function load() {
             <td>${escapeHtml(o.buyerPhone || '-')}</td>
             <td>${escapeHtml(o.buyerEmail || '-')}</td>
             <td>${o.quantity}</td>
-            <td>${o.tickets.map(n => '#' + String(n).padStart(4,'0')).join(', ') || '-'}</td>
+            <td>${o.tickets.map(n => '#' + n).join(', ') || '-'}</td>
             <td><span class="badge ${o.status}">${statusLabels[o.status] || o.status}</span></td>
             <td>${o.invoiceLink ? `<a href="${o.invoiceLink}" target="_blank" rel="noopener" style="color:#6c8cff;">Vezi</a>` : '-'}</td>
           </tr>

@@ -64,7 +64,7 @@ async function load() {
             <td>${escapeHtml(o.buyerPhone || '-')}</td>
             <td>${escapeHtml(o.buyerEmail || '-')}</td>
             <td>${o.quantity}</td>
-            <td>${o.tickets.map(n => '#' + String(n).padStart(4,'0')).join(', ') || '-'}</td>
+            <td>${o.tickets.map(n => '#' + n).join(', ') || '-'}</td>
             <td>${(o.amountBani/100).toFixed(2)} RON</td>
             <td>${(o.platformFeeBani/100).toFixed(2)} RON</td>
             <td><span class="badge ${o.status}">${statusLabels[o.status] || o.status}</span></td>

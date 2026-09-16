@@ -157,12 +157,38 @@ complet la toate comenzile, de la toti vanzatorii, cu toate datele
    - `PLATFORM_FEE_PERCENT` — comisionul tau, in procente.
    - `SESSION_SECRET` — un sir lung si aleatoriu.
    - `ADMIN_PASSWORD` — parola ta de acces la `/admin/login.html`.
+   - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` — optional, doar daca vrei
+     si plata cu cardul prin Stripe, pe langa PayU (vezi sectiunea "Stripe"
+     de mai jos). Daca lipsesc, pe site apare doar PayU.
 4. `npm start`
 5. Notificarile PayU ajung automat pe `POST ${BASE_URL}/payu/notificare`
    (setat automat de server la crearea fiecarei comenzi) — nu mai e nevoie
    de o unealta separata gen `stripe listen`, doar ca `BASE_URL` sa fie
    accesibila public. Vezi si sectiunea "Despre integrarea PayU" de mai sus
    pentru ce anume nu a putut fi testat impotriva serverelor reale PayU.
+
+## Stripe — a doua metoda de plata (cardul)
+
+Pe langa PayU, clientii pot plati si cu cardul prin Stripe Checkout. Cand
+ambele metode sunt configurate, la checkout apare o alegere ("PayU" /
+"Card (Stripe)"); daca doar una e configurata, aceea se foloseste automat,
+fara alegere vizibila.
+
+1. Din [dashboard.stripe.com](https://dashboard.stripe.com) → Developers →
+   API keys, copiaza cheia secreta (`sk_test_...` pentru testare,
+   `sk_live_...` pentru bani reali) in `STRIPE_SECRET_KEY`.
+2. Developers → Webhooks → Add endpoint, cu URL-ul
+   `${BASE_URL}/stripe/webhook` si evenimentele
+   `checkout.session.completed` si `checkout.session.async_payment_succeeded`.
+   Copiaza "Signing secret" (`whsec_...`) in `STRIPE_WEBHOOK_SECRET`.
+3. Pentru testare fara bani reali, foloseste cheile de test (`sk_test_...`)
+   si un card de test Stripe (ex: `4242 4242 4242 4242`, orice data
+   viitoare, orice CVC) — vezi
+   [docs.stripe.com/testing](https://docs.stripe.com/testing).
+4. Comanda platita prin Stripe urmeaza exact acelasi flux ca cea platita
+   prin PayU (intrebare de verificare, alocare numar, livrare produs
+   digital, factura automata daca ai Oblio configurat) — diferenta e doar
+   in modul in care se confirma plata (webhook Stripe vs. notificare PayU).
 
 ## Structura tehnica, pe scurt
 

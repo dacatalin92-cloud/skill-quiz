@@ -98,6 +98,16 @@ if (!orderColumns.includes('invoice_link')) {
   db.exec('ALTER TABLE orders ADD COLUMN invoice_link TEXT');
 }
 
+// Migratie usoara: adauga coloanele pentru plata prin Stripe (a doua
+// metoda de plata, pe langa PayU) - pentru bazele de date create inainte
+// de a exista aceasta integrare.
+if (!orderColumns.includes('payment_method')) {
+  db.exec("ALTER TABLE orders ADD COLUMN payment_method TEXT NOT NULL DEFAULT 'payu'");
+}
+if (!orderColumns.includes('stripe_session_id')) {
+  db.exec('ALTER TABLE orders ADD COLUMN stripe_session_id TEXT');
+}
+
 // Tabel pentru mesajele WhatsApp primite de la clienti (raspunsuri la
 // notificarile automate de produs nou), afisate in panoul de admin.
 db.exec(`

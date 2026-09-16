@@ -1,7 +1,7 @@
 {
   "name": "skill-quiz-shop",
   "version": "1.0.0",
-  "description": "Marketplace propriu: vanzatori multipli, achizitie pe baza unei intrebari de tip skill-testing, livrare produs digital, plata impartita automat prin PayU Romania",
+  "description": "Achizitie pe baza unei intrebari de tip skill-testing, livrare produs digital, plata prin PayU Romania sau card (Stripe)",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
@@ -16,6 +16,7 @@
     "express": "^4.19.2",
     "multer": "^2.0.1",
     "pdfkit": "^0.19.1",
+    "stripe": "^22.6.2",
     "uuid": "^9.0.1",
     "web-push": "^3.6.7"
   }

@@ -12,6 +12,7 @@ const {
 } = require('./lib/session');
 const { makeImageUploader, IMAGES_DIR } = require('./lib/uploads');
 const { makePayU } = require('./lib/payu');
+const { makeStripe } = require('./lib/stripe');
 const { makeMailer, escapeHtml } = require('./lib/mailer');
 const { generateQuestion } = require('./lib/questionGenerator');
 const { renderTicketSvg } = require('./lib/ticketImage');
@@ -45,6 +46,15 @@ const payu = payuConfigured
       sandbox: PAYU_SANDBOX,
       marketplacePartnerId: PAYU_MARKETPLACE_PARTNER_ID,
     })
+  : null;
+
+// Stripe - a doua metoda de plata, pe langa PayU. Clientul alege la
+// checkout intre PayU si plata cu cardul prin Stripe.
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
+const stripeConfigured = !!STRIPE_SECRET_KEY;
+const stripeClient = stripeConfigured
+  ? makeStripe({ secretKey: STRIPE_SECRET_KEY, webhookSecret: STRIPE_WEBHOOK_SECRET })
   : null;
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
@@ -145,7 +155,40 @@ app.post('/payu/notificare', express.raw({ type: '*/*' }), (req, res) => {
   }
 });
 
-app.use(express.json()); app.post('/api/abonare', (req, res) => { const digits = req.body && req.body.phone ? String(req.body.phone).replace(/\D/g, '') : ''; if (!digits || digits.length < 9) { return res.status(400).json({ error: 'Un numar de telefon valid este obligatoriu.' }); } try { db.prepare('INSERT OR IGNORE INTO subscribers (id, phone) VALUES (?, ?)').run(uuidv4(), String(req.body.phone).trim()); res.json({ ok: true }); } catch (err) { console.error(err); res.status(500).json({ error: 'Eroare la abonare.' }); } }); app.get('/api/push/public-key', (req, res) => { res.json({ publicKey: pushConfigured ? PUSH_VAPID_PUBLIC_KEY : null }); }); app.post('/api/push/subscribe', (req, res) => { const sub = req.body; if (!sub || !sub.endpoint || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) { return res.status(400).json({ error: 'Abonament push invalid.' }); } try { db.prepare('INSERT INTO push_subscriptions (id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth').run(uuidv4(), sub.endpoint, sub.keys.p256dh, sub.keys.auth); res.json({ ok: true }); } catch (err) { console.error(err); res.status(500).json({ error: 'Eroare la abonare push.' }); } });
+// ---------------------------------------------------------------------------
+// Webhook Stripe - body RAW (necesar pentru verificarea semnaturii), definit
+// tot inainte de express.json(), la fel ca la PayU. Stripe trimite un POST
+// aici cand se finalizeaza plata unei Checkout Session.
+// ---------------------------------------------------------------------------
+app.post('/stripe/webhook', express.raw({ type: '*/*' }), (req, res) => {
+  if (!stripeClient) return res.status(500).send('Stripe nu este configurat.');
+  if (!STRIPE_WEBHOOK_SECRET) {
+    console.error('STRIPE_WEBHOOK_SECRET nu este setat - nu pot verifica webhook-ul Stripe.');
+    return res.status(500).send('Webhook Stripe neconfigurat.');
+  }
+  let event;
+  try {
+    event = stripeClient.constructWebhookEvent(req.body, req.headers['stripe-signature']);
+  } catch (err) {
+    console.error('Semnatura webhook-ului Stripe nu a putut fi verificata:', err.message);
+    return res.status(400).send('Semnatura invalida.');
+  }
+  try {
+    if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
+      const session = event.data.object;
+      const orderId = session.client_reference_id || (session.metadata && session.metadata.orderId);
+      if (orderId && session.payment_status === 'paid') {
+        markOrderPaidStripe(orderId, session.id);
+      }
+    }
+    res.status(200).send('OK');
+  } catch (err) {
+    console.error('Eroare la procesarea webhook-ului Stripe:', err.message);
+    res.status(400).send('Eroare la procesare.');
+  }
+});
+
+app.use(express.json()); app.post('/api/abonare', (req, res) => { const digits = req.body && req.body.phone ? String(req.body.phone).replace(/\D/g, '') : ''; if (!digits || digits.length < 9) { return res.status(400).json({ error: 'Un numar de telefon valid este obligatoriu.' }); } try { db.prepare('INSERT OR IGNORE INTO subscribers (id, phone) VALUES (?, ?)').run(uuidv4(), String(req.body.phone).trim()); res.json({ ok: true }); } catch (err) { console.error(err); res.status(500).json({ error: 'Eroare la abonare.' }); } }); app.get('/api/push/public-key', (req, res) => { res.json({ publicKey: pushConfigured ? PUSH_VAPID_PUBLIC_KEY : null }); }); app.get('/api/payment-methods', (req, res) => { res.json({ payu: !!payu, stripe: !!stripeClient }); }); app.post('/api/push/subscribe', (req, res) => { const sub = req.body; if (!sub || !sub.endpoint || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) { return res.status(400).json({ error: 'Abonament push invalid.' }); } try { db.prepare('INSERT INTO push_subscriptions (id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth').run(uuidv4(), sub.endpoint, sub.keys.p256dh, sub.keys.auth); res.json({ ok: true }); } catch (err) { console.error(err); res.status(500).json({ error: 'Eroare la abonare push.' }); } });
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads/images', express.static(IMAGES_DIR));
@@ -235,6 +278,13 @@ function assignTickets(order) {
   }
 }
 
+function finalizePaidOrder(orderId) {
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+  assignTickets(order);
+  sendOrderConfirmationEmail(order);
+  createInvoiceForOrder(order).catch((err) => console.error('Eroare la emiterea facturii:', err.message));
+}
+
 function markOrderPaid(orderId, payuOrderId) {
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
   if (!order || order.status !== 'pending') return;
@@ -243,9 +293,17 @@ function markOrderPaid(orderId, payuOrderId) {
   } else {
     db.prepare(`UPDATE orders SET status = 'paid' WHERE id = ?`).run(orderId);
   }
-  assignTickets(db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId));
-  sendOrderConfirmationEmail(order);
-  createInvoiceForOrder(order).catch((err) => console.error('Eroare la emiterea facturii:', err.message));
+  finalizePaidOrder(orderId);
+}
+
+// Echivalentul lui markOrderPaid, pentru comenzile platite prin Stripe
+// (retine si id-ul sesiunii Stripe Checkout, util pentru interogari
+// ulterioare sau rambursari facute manual din dashboard-ul Stripe).
+function markOrderPaidStripe(orderId, stripeSessionId) {
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+  if (!order || order.status !== 'pending') return;
+  db.prepare(`UPDATE orders SET status = 'paid', stripe_session_id = ? WHERE id = ?`).run(stripeSessionId, orderId);
+  finalizePaidOrder(orderId);
 }
 
 // Trimite (best-effort, nu blocheaza fluxul de plata daca esueaza) un email
@@ -317,8 +375,15 @@ app.get('/api/produs/:id/participanti', (req, res) => {
 
 app.post('/api/checkout', async (req, res) => {
   try {
-    if (!payu) return res.status(500).json({ error: 'PayU nu este configurat pe server (vezi .env).' });
     const { productId, name, phone, email } = req.body;
+    // Metoda de plata aleasa de client: 'payu' (implicit) sau 'stripe'.
+    const paymentMethod = req.body.paymentMethod === 'stripe' ? 'stripe' : 'payu';
+    if (paymentMethod === 'stripe' && !stripeClient) {
+      return res.status(500).json({ error: 'Plata cu cardul (Stripe) nu este configurata pe server.' });
+    }
+    if (paymentMethod === 'payu' && !payu) {
+      return res.status(500).json({ error: 'PayU nu este configurat pe server (vezi .env).' });
+    }
     const quantity = Math.max(1, Math.min(MAX_QUANTITY_PER_ORDER, parseInt(req.body.quantity, 10) || 1));
 
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Numele este obligatoriu.' });
@@ -351,9 +416,25 @@ app.post('/api/checkout', async (req, res) => {
     const feeBani = 0; // Fara marketplace/split - toti banii merg direct in contul PayU al platformei.
 
     db.prepare(
-      `INSERT INTO orders (id, product_id, seller_id, buyer_name, buyer_phone, buyer_email, quantity, attempts_left, amount_bani, platform_fee_bani)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(orderId, product.id, seller.id, String(name).trim(), String(phone).trim(), trimmedEmail, quantity, MAX_ATTEMPTS, totalBani, feeBani);
+      `INSERT INTO orders (id, product_id, seller_id, buyer_name, buyer_phone, buyer_email, quantity, attempts_left, amount_bani, platform_fee_bani, payment_method)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(orderId, product.id, seller.id, String(name).trim(), String(phone).trim(), trimmedEmail, quantity, MAX_ATTEMPTS, totalBani, feeBani, paymentMethod);
+
+    if (paymentMethod === 'stripe') {
+      const { redirectUrl, sessionId } = await stripeClient.createCheckoutSession({
+        orderId,
+        amountBani: totalBani,
+        currency: product.currency ? product.currency.toUpperCase() : 'RON',
+        description: `${product.name} x${quantity}`,
+        buyerEmail: trimmedEmail,
+        successUrl: `${BASE_URL}/raspunde.html?order=${orderId}`,
+        cancelUrl: `${BASE_URL}/?canceled=1`,
+      });
+      if (sessionId) {
+        db.prepare(`UPDATE orders SET stripe_session_id = ? WHERE id = ?`).run(sessionId, orderId);
+      }
+      return res.json({ url: redirectUrl });
+    }
 
     const { redirectUrl, payuOrderId } = await payu.createOrder({
       orderId,
@@ -381,11 +462,25 @@ app.get('/api/order/:id', async (req, res) => {
   let order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!order) return res.status(404).json({ error: 'Comanda nu a fost gasita.' });
 
-  // Notificarile PayU ar trebui sa actualizeze deja starea comenzii, dar
-  // pastram si o verificare directa la interogare, ca plasa de siguranta
+  // Notificarile PayU/Stripe ar trebui sa actualizeze deja starea comenzii,
+  // dar pastram si o verificare directa la interogare, ca plasa de siguranta
   // (de exemplu daca notificarea nu a ajuns inca sau serverul nu era
   // accesibil public in momentul respectiv).
-  if (order.status === 'pending' && payu) {
+  if (order.status === 'pending' && order.payment_method === 'stripe' && stripeClient) {
+    try {
+      const result = order.stripe_session_id
+        ? await stripeClient.getSessionStatus(order.stripe_session_id)
+        : await stripeClient.getSessionStatusByOrderId(order.id);
+      if (result.paid) {
+        markOrderPaidStripe(order.id, result.sessionId || order.stripe_session_id);
+        order = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
+      } else if (result.sessionId && !order.stripe_session_id) {
+        db.prepare('UPDATE orders SET stripe_session_id = ? WHERE id = ?').run(result.sessionId, order.id);
+      }
+    } catch (err) {
+      console.error('Nu am putut verifica starea comenzii la Stripe:', err.message);
+    }
+  } else if (order.status === 'pending' && payu) {
     try {
       const result = order.payu_order_id
         ? await payu.getOrderStatus(order.payu_order_id)
@@ -908,6 +1003,8 @@ app.post('/api/admin/whatsapp-trimite', requireAdmin, async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Serverul ruleaza pe ${BASE_URL} (port ${PORT})`);
   if (!payu) console.warn('ATENTIE: variabilele PAYU_* lipsesc din .env - platile prin PayU nu vor functiona.');
+  if (!stripeClient) console.warn('ATENTIE: STRIPE_SECRET_KEY lipseste din .env - plata cu cardul prin Stripe nu va functiona.');
+  else if (!STRIPE_WEBHOOK_SECRET) console.warn('ATENTIE: STRIPE_WEBHOOK_SECRET lipseste din .env - webhook-ul Stripe nu va putea fi verificat.');
   if (!ADMIN_PASSWORD) console.warn('ATENTIE: ADMIN_PASSWORD lipseste din .env - panoul de admin este dezactivat.');
   if (!oblio) console.warn('ATENTIE: variabilele OBLIO_* lipsesc din .env - facturarea automata este dezactivata.');
   if (!whatsapp) console.warn('ATENTIE: variabilele META_WHATSAPP_TOKEN / META_PHONE_NUMBER_ID lipsesc din .env - notificarile WhatsApp la produs nou sunt dezactivate.');

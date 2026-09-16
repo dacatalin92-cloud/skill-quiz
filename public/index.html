@@ -20,6 +20,8 @@
     border:1px solid #2a2e38; background:#10131a; color:#e8eaed; font-size:0.9rem;
   }
   .participants-link { display:block; text-align:center; margin-top:10px; font-size:0.82rem; color:#6c8cff; }
+  .payment-method-choice { display:flex; gap:14px; margin-bottom:10px; font-size:0.85rem; color:#c7cad1; }
+  .payment-method-choice label { display:flex; align-items:center; gap:5px; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -49,7 +51,20 @@ if (params.get('canceled')) {
   document.getElementById('canceled-notice').style.display = 'block';
 }
 
+let paymentMethods = { payu: true, stripe: false };
+
+async function loadPaymentMethods() {
+  try {
+    const res = await fetch('/api/payment-methods');
+    paymentMethods = await res.json();
+  } catch (err) {
+    // Daca cererea esueaza, ramanem pe implicit (doar PayU) - formularul
+    // de cumparare functioneaza in continuare.
+  }
+}
+
 async function loadProducts() {
+  await loadPaymentMethods();
   const res = await fetch('/api/products');
   const products = await res.json();
   const el = document.getElementById('products');
@@ -77,6 +92,12 @@ async function loadProducts() {
           <input type="tel" name="buyerPhone" placeholder="Numar de telefon" required />
           <input type="email" name="buyerEmail" placeholder="Email (optional, pentru confirmare)" />
           <input type="number" name="quantity" min="1" max="${p.stockRemaining}" value="1" required />
+          ${paymentMethods.payu && paymentMethods.stripe ? `
+          <div class="payment-method-choice">
+            <label><input type="radio" name="paymentMethod" value="payu" checked /> PayU</label>
+            <label><input type="radio" name="paymentMethod" value="stripe" /> Card (Stripe)</label>
+          </div>
+          ` : `<input type="hidden" name="paymentMethod" value="${paymentMethods.stripe ? 'stripe' : 'payu'}" />`}
           <button type="submit">Cumpara</button>
         </form>
       `}
@@ -102,6 +123,7 @@ async function startCheckout(event, productId) {
         phone: form.buyerPhone.value,
         email: form.buyerEmail.value,
         quantity: parseInt(form.quantity.value, 10),
+        paymentMethod: form.paymentMethod ? form.paymentMethod.value : 'payu',
       }),
     });
     const data = await res.json();

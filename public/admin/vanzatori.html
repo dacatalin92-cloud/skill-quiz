@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Admin - vanzatori</title>
+<link rel="stylesheet" href="/style.css" />
+<style>
+  .top-bar { max-width:1100px; margin: 0 auto; padding: 16px 24px 0; display:flex; justify-content:space-between; align-items:center; gap:12px; }
+  .top-bar button { width:auto; padding:6px 14px; font-size:0.85rem; }
+  .top-bar .nav-links { display:flex; align-items:center; gap:16px; }
+  .top-bar .nav-links a { color:#6c8cff; font-size:0.9rem; }
+  main { max-width: 1100px; }
+  .seller-item { background:#171a21; border:1px solid #2a2e38; border-radius:12px; padding:16px 18px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  .seller-item .info { color:#9aa0ab; font-size:0.85rem; margin-top:4px; }
+  .badge { display:inline-block; padding:2px 9px; border-radius:20px; font-size:0.72rem; font-weight:600; }
+  .badge.on { background:#16301f; color:#a4f0bb; }
+  .badge.off { background:#331c1c; color:#ffb3b3; }
+</style>
+</head>
+<body>
+<div class="top-bar">
+  <strong>Panou administrator</strong>
+  <div class="nav-links">
+    <a href="/admin/comenzi.html">Toate comenzile</a>
+    <a href="/admin/whatsapp.html">Mesaje WhatsApp</a>
+    <button id="logout-btn">Delogare</button>
+  </div>
+</div>
+<header>
+  <h1>Vanzatori</h1>
+  <p>Poti dezactiva dintr-o data toate produsele unui vanzator, ca sa nu mai apara pe vitrina publica. Nimic nu se sterge - actiunea e reversibila.</p>
+</header>
+<main>
+  <div id="content" class="question-card">Se incarca...</div>
+</main>
+
+<script src="/common.js"></script>
+<script>
+async function load() {
+  const res = await fetch('/api/admin/vanzatori');
+  if (res.status === 401) { location.href = '/admin/login.html'; return; }
+  const sellers = await res.json();
+  const el = document.getElementById('content');
+  if (!sellers.length) {
+    el.innerHTML = '<p style="color:#9aa0ab;">Nu exista inca niciun vanzator inregistrat.</p>';
+    return;
+  }
+  el.innerHTML = sellers.map(s => {
+    const allActive = s.totalProducts > 0 && s.activeProducts === s.totalProducts;
+    const allInactive = s.activeProducts === 0;
+    return `
+    <div class="seller-item">
+      <div>
+        <strong>${escapeHtml(s.name)}</strong>
+        <span class="badge ${allInactive ? 'off' : 'on'}">${allInactive ? 'Toate dezactivate' : (allActive ? 'Toate active' : 'Partial active')}</span>
+        <div class="info">${escapeHtml(s.email)} &middot; ${s.activeProducts} active din ${s.totalProducts} produse</div>
+      </div>
+      <div>
+        <button data-id="${s.id}" data-active="0" class="toggle-btn" ${allInactive ? 'disabled' : ''}>Dezactiveaza toate produsele</button>
+        <button data-id="${s.id}" data-active="1" class="toggle-btn" ${allActive ? 'disabled' : ''}>Activeaza toate produsele</button>
+      </div>
+    </div>
+  `;
+  }).join('');
+
+  el.querySelectorAll('.toggle-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const active = btn.dataset.active === '1';
+      const label = active ? 'activezi' : 'dezactivezi';
+      if (!confirm(`Sigur vrei sa ${label} toate produsele acestui vanzator?`)) return;
+      btn.disabled = true;
+      await fetch(`/api/admin/vanzatori/${btn.dataset.id}/produse-active`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active }),
+      });
+      load();
+    });
+  });
+}
+
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  await fetch('/api/admin/logout', { method: 'POST' });
+  location.href = '/admin/login.html';
+});
+
+load();
+</script>
+</body>
+</html>

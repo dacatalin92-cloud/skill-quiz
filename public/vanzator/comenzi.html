@@ -67,6 +67,9 @@ async function load() {
   `;
 }
 load();
+// Actualizare automata, ca sa vezi comenzile noi fara sa dai refresh manual
+// (util cand pagina e instalata ca aplicatie pe telefon).
+setInterval(load, 7000);
 </script>
 </body>
 </html>

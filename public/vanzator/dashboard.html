@@ -19,7 +19,10 @@
 </head>
 <body>
 <div class="top-bar">
-  <strong id="seller-name">...</strong>
+  <span style="display:flex;align-items:center;gap:8px;">
+    <strong id="seller-name">...</strong>
+    <button id="edit-name-btn" style="width:auto;padding:2px 8px;font-size:0.75rem;">Editeaza</button>
+  </span>
   <div>
     <a href="/vanzator/comenzi.html" style="color:#6c8cff;font-size:0.9rem;margin-right:14px;">Evidenta achizitiilor</a>
     <button id="logout-btn">Delogare</button>
@@ -101,6 +104,23 @@ async function loadProducts() {
 document.getElementById('logout-btn').addEventListener('click', async () => {
   await fetch('/api/vanzator/logout', { method: 'POST' });
   location.href = '/vanzator/login.html';
+});
+
+document.getElementById('edit-name-btn').addEventListener('click', async () => {
+  const current = document.getElementById('seller-name').textContent;
+  const nou = prompt('Numele afisat:', current);
+  if (nou == null || !nou.trim() || nou.trim() === current) return;
+  const res = await fetch('/api/vanzator/nume', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: nou.trim() }),
+  });
+  const data = await res.json();
+  if (data.ok) {
+    document.getElementById('seller-name').textContent = data.name;
+  } else {
+    alert(data.error || 'Eroare la salvare.');
+  }
 });
 
 loadMe();

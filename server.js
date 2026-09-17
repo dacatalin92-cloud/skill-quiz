@@ -36,6 +36,13 @@ const PAYU_SECOND_KEY = process.env.PAYU_SECOND_KEY || '';
 const PAYU_SANDBOX = String(process.env.PAYU_SANDBOX || 'true') === 'true';
 const PAYU_MARKETPLACE_PARTNER_ID = process.env.PAYU_MARKETPLACE_PARTNER_ID || '';
 
+// Ascunde PayU de pe site (la cererea lui Andrei) - clientii vor vedea/putea
+// folosi doar plata cu cardul prin Stripe. Codul PayU ramane configurat si
+// functional pe server, doar nu mai este oferit clientilor. Pentru a-l
+// reafisa mai tarziu, seteaza variabila HIDE_PAYU=false pe Railway (fara sa
+// mai fie nevoie de o noua modificare de cod).
+const HIDE_PAYU = String(process.env.HIDE_PAYU || 'true').toLowerCase() !== 'false';
+
 const payuConfigured = !!(PAYU_POS_ID && PAYU_CLIENT_ID && PAYU_CLIENT_SECRET && PAYU_SECOND_KEY);
 const payu = payuConfigured
   ? makePayU({
@@ -188,7 +195,7 @@ app.post('/stripe/webhook', express.raw({ type: '*/*' }), (req, res) => {
   }
 });
 
-app.use(express.json()); app.post('/api/abonare', (req, res) => { const digits = req.body && req.body.phone ? String(req.body.phone).replace(/\D/g, '') : ''; if (!digits || digits.length < 9) { return res.status(400).json({ error: 'Un numar de telefon valid este obligatoriu.' }); } try { db.prepare('INSERT OR IGNORE INTO subscribers (id, phone) VALUES (?, ?)').run(uuidv4(), String(req.body.phone).trim()); res.json({ ok: true }); } catch (err) { console.error(err); res.status(500).json({ error: 'Eroare la abonare.' }); } }); app.get('/api/push/public-key', (req, res) => { res.json({ publicKey: pushConfigured ? PUSH_VAPID_PUBLIC_KEY : null }); }); app.get('/api/payment-methods', (req, res) => { res.json({ payu: !!payu, stripe: !!stripeClient }); }); app.post('/api/push/subscribe', (req, res) => { const sub = req.body; if (!sub || !sub.endpoint || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) { return res.status(400).json({ error: 'Abonament push invalid.' }); } try { db.prepare('INSERT INTO push_subscriptions (id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth').run(uuidv4(), sub.endpoint, sub.keys.p256dh, sub.keys.auth); res.json({ ok: true }); } catch (err) { console.error(err); res.status(500).json({ error: 'Eroare la abonare push.' }); } });
+app.use(express.json()); app.post('/api/abonare', (req, res) => { const digits = req.body && req.body.phone ? String(req.body.phone).replace(/\D/g, '') : ''; if (!digits || digits.length < 9) { return res.status(400).json({ error: 'Un numar de telefon valid este obligatoriu.' }); } try { db.prepare('INSERT OR IGNORE INTO subscribers (id, phone) VALUES (?, ?)').run(uuidv4(), String(req.body.phone).trim()); res.json({ ok: true }); } catch (err) { console.error(err); res.status(500).json({ error: 'Eroare la abonare.' }); } }); app.get('/api/push/public-key', (req, res) => { res.json({ publicKey: pushConfigured ? PUSH_VAPID_PUBLIC_KEY : null }); }); app.get('/api/payment-methods', (req, res) => { res.json({ payu: !!payu && !HIDE_PAYU, stripe: !!stripeClient }); }); app.post('/api/push/subscribe', (req, res) => { const sub = req.body; if (!sub || !sub.endpoint || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) { return res.status(400).json({ error: 'Abonament push invalid.' }); } try { db.prepare('INSERT INTO push_subscriptions (id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth').run(uuidv4(), sub.endpoint, sub.keys.p256dh, sub.keys.auth); res.json({ ok: true }); } catch (err) { console.error(err); res.status(500).json({ error: 'Eroare la abonare push.' }); } });
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads/images', express.static(IMAGES_DIR));
@@ -377,12 +384,17 @@ app.post('/api/checkout', async (req, res) => {
   try {
     const { productId, name, phone, email } = req.body;
     // Metoda de plata aleasa de client: 'payu' (implicit) sau 'stripe'.
-    const paymentMethod = req.body.paymentMethod === 'stripe' ? 'stripe' : 'payu';
+    let paymentMethod = req.body.paymentMethod === 'stripe' ? 'stripe' : 'payu';
+    // PayU este ascuns temporar (HIDE_PAYU) - orice cerere care ar folosi PayU
+    // trece automat pe Stripe, daca e disponibil.
+    if (paymentMethod === 'payu' && HIDE_PAYU && stripeClient) {
+      paymentMethod = 'stripe';
+    }
     if (paymentMethod === 'stripe' && !stripeClient) {
       return res.status(500).json({ error: 'Plata cu cardul (Stripe) nu este configurata pe server.' });
     }
-    if (paymentMethod === 'payu' && !payu) {
-      return res.status(500).json({ error: 'PayU nu este configurat pe server (vezi .env).' });
+    if (paymentMethod === 'payu' && (!payu || HIDE_PAYU)) {
+      return res.status(500).json({ error: 'PayU nu este disponibil momentan.' });
     }
     const quantity = Math.max(1, Math.min(MAX_QUANTITY_PER_ORDER, parseInt(req.body.quantity, 10) || 1));
 

@@ -919,6 +919,43 @@ app.get('/api/admin/comenzi', requireAdmin, (req, res) => {
   );
 });
 
+// Lista tuturor vanzatorilor inregistrati, cu numarul de produse (active/
+// total) - ca sa poata fi gestionati (ex. dezactivat produsele unui cont)
+// din panoul de admin.
+app.get('/api/admin/vanzatori', requireAdmin, (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT s.id, s.name, s.email,
+              COUNT(p.id) as total_products,
+              SUM(CASE WHEN p.active = 1 THEN 1 ELSE 0 END) as active_products
+       FROM sellers s
+       LEFT JOIN products p ON p.seller_id = s.id
+       GROUP BY s.id
+       ORDER BY s.created_at ASC`
+    )
+    .all();
+  res.json(
+    rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      email: r.email,
+      totalProducts: r.total_products,
+      activeProducts: r.active_products || 0,
+    }))
+  );
+});
+
+// Dezactiveaza/activeaza dintr-o data toate produsele unui vanzator (ex.
+// pentru a-i scoate produsele de pe vitrina publica, fara sa se stearga
+// nimic din baza de date - actiune complet reversibila).
+app.post('/api/admin/vanzatori/:id/produse-active', requireAdmin, (req, res) => {
+  const seller = getSeller(req.params.id);
+  if (!seller) return res.status(404).json({ error: 'Vanzator inexistent.' });
+  const active = req.body && req.body.active ? 1 : 0;
+  const result = db.prepare('UPDATE products SET active = ? WHERE seller_id = ?').run(active, seller.id);
+  res.json({ ok: true, updated: result.changes });
+});
+
 // Webhook Meta pentru WhatsApp: Meta face un GET de verificare o singura
 // data, la configurarea callback-ului in App Dashboard (trebuie sa
 // raspundem cu hub.challenge daca hub.verify_token se potriveste cu

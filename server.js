@@ -724,6 +724,20 @@ app.post('/api/vanzator/logout', (req, res) => {
   res.json({ ok: true });
 });
 
+// Vanzatorul isi poate schimba numele afisat public (langa produsele lui).
+app.post('/api/vanzator/nume', requireSeller, (req, res) => {
+  try {
+    const name = String((req.body || {}).name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Numele nu poate fi gol.' });
+    if (name.length > 80) return res.status(400).json({ error: 'Numele este prea lung.' });
+    db.prepare('UPDATE sellers SET name = ? WHERE id = ?').run(name, req.seller.id);
+    res.json({ ok: true, name });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Eroare la actualizarea numelui.' });
+  }
+});
+
 app.get('/api/vanzator/me', requireSeller, async (req, res) => {
   let seller = req.seller;
   if (payu && seller.payu_ext_customer_id) {

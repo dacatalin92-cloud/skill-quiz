@@ -968,6 +968,101 @@ app.post('/api/admin/vanzatori/:id/produse-active', requireAdmin, (req, res) => 
   res.json({ ok: true, updated: result.changes });
 });
 
+// Statistici generale pentru dashboard-ul de admin: o privire de ansamblu
+// rapida asupra a ce se intampla pe site (vanzatori, produse, comenzi, incasari).
+app.get('/api/admin/stats', requireAdmin, (req, res) => {
+  const sellers = db.prepare('SELECT COUNT(*) as c FROM sellers').get().c;
+  const products = db.prepare('SELECT COUNT(*) as total, SUM(CASE WHEN active = 1 THEN 1 ELSE 0 END) as active FROM products').get();
+  const orders = db
+    .prepare(`SELECT COUNT(*) as total, COALESCE(SUM(amount_bani), 0) as revenue FROM orders WHERE status IN ('paid','locked','unlocked')`)
+    .get();
+  const today = db
+    .prepare(
+      `SELECT COUNT(*) as total, COALESCE(SUM(amount_bani), 0) as revenue FROM orders
+       WHERE status IN ('paid','locked','unlocked') AND date(created_at) = date('now')`
+    )
+    .get();
+  res.json({
+    sellers,
+    totalProducts: products.total || 0,
+    activeProducts: products.active || 0,
+    totalOrders: orders.total || 0,
+    revenueBani: orders.revenue || 0,
+    ordersToday: today.total || 0,
+    revenueTodayBani: today.revenue || 0,
+  });
+});
+
+// Toate produsele, de la toti vanzatorii, cu cate s-au vandut si cati bani au
+// adus - ca sa poti vedea dintr-o privire ce merge bine si sa extragi
+// cumparatorii unui anumit produs.
+app.get('/api/admin/produse', requireAdmin, (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT p.id, p.name, p.price_bani, p.stock_total, p.active, p.created_at,
+              s.name as seller_name,
+              (SELECT COUNT(*) FROM tickets t WHERE t.product_id = p.id) as sold,
+              (SELECT COUNT(*) FROM orders o WHERE o.product_id = p.id AND o.status IN ('paid','locked','unlocked')) as order_count,
+              (SELECT COALESCE(SUM(o.amount_bani), 0) FROM orders o WHERE o.product_id = p.id AND o.status IN ('paid','locked','unlocked')) as revenue_bani
+       FROM products p
+       JOIN sellers s ON s.id = p.seller_id
+       ORDER BY p.created_at DESC`
+    )
+    .all();
+  res.json(
+    rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      priceBani: r.price_bani,
+      stockTotal: r.stock_total,
+      active: !!r.active,
+      sellerName: r.seller_name,
+      sold: r.sold,
+      orderCount: r.order_count,
+      revenueBani: r.revenue_bani,
+      createdAt: r.created_at,
+    }))
+  );
+});
+
+// Extrage (CSV) toti cumparatorii confirmati ai unui produs - nume, telefon,
+// email, cantitate, numerele biletelor, data si suma platita.
+app.get('/api/admin/produse/:id/export.csv', requireAdmin, (req, res) => {
+  const product = getProduct(req.params.id);
+  if (!product) return res.status(404).send('Produs inexistent.');
+  const orders = db
+    .prepare(
+      `SELECT * FROM orders WHERE product_id = ? AND status IN ('paid','locked','unlocked') ORDER BY created_at ASC`
+    )
+    .all(product.id);
+
+  const csvField = (value) => `"${String(value == null ? '' : value).replace(/"/g, '""')}"`;
+  const header = ['Data', 'Nume client', 'Telefon', 'Email', 'Cantitate', 'Numere bilete', 'Suma (RON)', 'Status'];
+  const lines = [header.map(csvField).join(',')];
+  for (const o of orders) {
+    const numbers = orderTicketNumbers(o.id).join('; ');
+    lines.push(
+      [
+        o.created_at,
+        o.buyer_name || '',
+        o.buyer_phone || '',
+        o.buyer_email || '',
+        o.quantity,
+        numbers,
+        (o.amount_bani / 100).toFixed(2),
+        o.status,
+      ]
+        .map(csvField)
+        .join(',')
+    );
+  }
+  const csv = '﻿' + lines.join('\r\n');
+  const safeName = String(product.name || 'produs').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="cumparatori-${safeName}.csv"`);
+  res.send(csv);
+});
+
 // Webhook Meta pentru WhatsApp: Meta face un GET de verificare o singura
 // data, la configurarea callback-ului in App Dashboard (trebuie sa
 // raspundem cu hub.challenge daca hub.verify_token se potriveste cu
@@ -1073,3 +1168,4 @@ app.listen(PORT, () => {
   if (!whatsapp) console.warn('ATENTIE: variabilele META_WHATSAPP_TOKEN / META_PHONE_NUMBER_ID lipsesc din .env - notificarile WhatsApp la produs nou sunt dezactivate.');
   if (!WHATSAPP_WEBHOOK_VERIFY_TOKEN) console.warn('ATENTIE: WHATSAPP_WEBHOOK_VERIFY_TOKEN lipseste din .env - webhook-ul de primire mesaje WhatsApp nu va putea fi verificat de Meta.');
 });
+

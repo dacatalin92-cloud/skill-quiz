@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dashboard admin</title>
+<link rel="stylesheet" href="/style.css" />
+<style>
+  .top-bar { max-width:1100px; margin: 0 auto; padding: 16px 24px 0; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  .top-bar button { width:auto; padding:6px 14px; font-size:0.85rem; }
+  .top-bar .nav-links { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .top-bar .nav-links a { color:#6c8cff; font-size:0.9rem; }
+  main { max-width: 1100px; }
+  .stats-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:12px; margin-bottom:24px; }
+  .stat-card { background:#171a21; border:1px solid #2a2e38; border-radius:12px; padding:16px 18px; }
+  .stat-card .label { color:#9aa0ab; font-size:0.8rem; }
+  .stat-card .value { font-size:1.6rem; font-weight:700; margin-top:4px; }
+  .row { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  table { width:100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem; }
+  th, td { text-align:left; padding: 9px 10px; border-bottom: 1px solid #2a2e38; }
+  th { color:#9aa0ab; font-weight:600; }
+  .badge { display:inline-block; padding:2px 9px; border-radius:20px; font-size:0.72rem; font-weight:600; }
+  .badge.on { background:#16301f; color:#a4f0bb; }
+  .badge.off { background:#331c1c; color:#ffb3b3; }
+  .export-btn { width:auto; padding:6px 12px; font-size:0.8rem; }
+</style>
+</head>
+<body>
+<div class="top-bar">
+  <strong>Panou administrator</strong>
+  <div class="nav-links">
+    <a href="/admin/comenzi.html">Toate comenzile</a>
+    <a href="/admin/vanzatori.html">Vanzatori</a>
+    <a href="/admin/whatsapp.html">Mesaje WhatsApp</a>
+    <button id="logout-btn">Delogare</button>
+  </div>
+</div>
+<header>
+  <h1>Dashboard</h1>
+  <p>Tot ce se intampla pe site, dintr-o singura privire.</p>
+</header>
+<main>
+  <div id="stats" class="stats-grid">
+    <div class="stat-card"><div class="label">Se incarca...</div></div>
+  </div>
+
+  <div class="row" style="margin-bottom:16px;">
+    <h2 style="margin:0;">Produse (toti vanzatorii)</h2>
+    <a href="/vanzator/produs-nou.html"><button style="width:auto;padding:10px 16px;">+ Adauga produs</button></a>
+  </div>
+  <div id="products" class="question-card">Se incarca...</div>
+</main>
+
+<script src="/common.js"></script>
+<script>
+async function loadStats() {
+  const res = await fetch('/api/admin/stats');
+  if (res.status === 401) { location.href = '/admin/login.html'; return; }
+  const s = await res.json();
+  const el = document.getElementById('stats');
+  el.innerHTML = `
+    <div class="stat-card"><div class="label">Vanzatori</div><div class="value">${s.sellers}</div></div>
+    <div class="stat-card"><div class="label">Produse active</div><div class="value">${s.activeProducts} / ${s.totalProducts}</div></div>
+    <div class="stat-card"><div class="label">Comenzi totale</div><div class="value">${s.totalOrders}</div></div>
+    <div class="stat-card"><div class="label">Incasari totale</div><div class="value">${(s.revenueBani/100).toFixed(2)} RON</div></div>
+    <div class="stat-card"><div class="label">Comenzi azi</div><div class="value">${s.ordersToday}</div></div>
+    <div class="stat-card"><div class="label">Incasari azi</div><div class="value">${(s.revenueTodayBani/100).toFixed(2)} RON</div></div>
+  `;
+}
+
+async function loadProducts() {
+  const res = await fetch('/api/admin/produse');
+  if (res.status === 401) { location.href = '/admin/login.html'; return; }
+  const products = await res.json();
+  const el = document.getElementById('products');
+  if (!products.length) {
+    el.innerHTML = '<p style="color:#9aa0ab;">Nu exista inca niciun produs.</p>';
+    return;
+  }
+  el.innerHTML = `
+    <div style="overflow-x:auto;"><table>
+      <thead>
+        <tr><th>Produs</th><th>Vanzator</th><th>Pret</th><th>Vandute</th><th>Comenzi</th><th>Incasari</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        ${products.map(p => `
+          <tr>
+            <td>${escapeHtml(p.name)}</td>
+            <td>${escapeHtml(p.sellerName)}</td>
+            <td>${(p.priceBani/100).toFixed(2)} RON</td>
+            <td>${p.sold} / ${p.stockTotal}</td>
+            <td>${p.orderCount}</td>
+            <td>${(p.revenueBani/100).toFixed(2)} RON</td>
+            <td><span class="badge ${p.active ? 'on' : 'off'}">${p.active ? 'Activ' : 'Dezactivat'}</span></td>
+            <td>${p.orderCount > 0 ? `<a class="export-btn" style="display:inline-block;text-decoration:none;color:#6c8cff;border:1px solid #2a2e38;border-radius:8px;padding:6px 12px;" href="/api/admin/produse/${p.id}/export.csv">Exporta cumparatori</a>` : '<span style="color:#565c68;font-size:0.8rem;">-</span>'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table></div>
+  `;
+}
+
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  await fetch('/api/admin/logout', { method: 'POST' });
+  location.href = '/admin/login.html';
+});
+
+loadStats();
+loadProducts();
+setInterval(() => { loadStats(); loadProducts(); }, 7000);
+</script>
+</body>
+</html>
+

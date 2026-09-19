@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Admin - numere produs</title>
+<link rel="stylesheet" href="/style.css" />
+<style>
+  .top-bar { max-width:1100px; margin: 0 auto; padding: 16px 24px 0; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  .top-bar button { width:auto; padding:6px 14px; font-size:0.85rem; }
+  .top-bar .nav-links { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .top-bar .nav-links a { color:#6c8cff; font-size:0.9rem; }
+  main { max-width: 1100px; }
+  .row { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  select { width:auto; padding:8px 12px; }
+  .legend { display:flex; align-items:center; gap:18px; margin:14px 0 18px; font-size:0.85rem; color:#9aa0ab; }
+  .legend .swatch { display:inline-block; width:14px; height:14px; border-radius:4px; margin-right:6px; vertical-align:middle; }
+  .swatch.green { background:#1c5c34; }
+  .swatch.red { background:#5c1c1c; }
+  .stat-line { color:#9aa0ab; font-size:0.9rem; margin-bottom:4px; }
+  table.numere { width:100%; border-collapse: separate; border-spacing: 4px; margin-top: 6px; table-layout: fixed; }
+  table.numere td {
+    text-align:center;
+    padding: 8px 4px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight:600;
+    cursor:default;
+  }
+  td.numar-achizitionat { background:#1c5c34; color:#c6f5d6; }
+  td.numar-liber { background:#3a1f1f; color:#ffb3b3; }
+</style>
+</head>
+<body>
+<div class="top-bar">
+  <strong>Panou administrator</strong>
+  <div class="nav-links">
+    <a href="/admin/index.html">Dashboard</a>
+    <a href="/admin/comenzi.html">Toate comenzile</a>
+    <a href="/admin/vanzatori.html">Vanzatori</a>
+    <a href="/admin/whatsapp.html">Mesaje WhatsApp</a>
+    <button id="logout-btn">Delogare</button>
+  </div>
+</div>
+<header>
+  <h1 id="titlu">Numere produs</h1>
+  <p>Toate numerele posibile ale produsului: verde = achizitionat, rosu = inca neachizitionat.</p>
+</header>
+<main>
+  <div class="row" style="margin-bottom:10px;">
+    <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;color:#9aa0ab;">
+      Produs:
+      <select id="product-select"><option>Se incarca...</option></select>
+    </label>
+  </div>
+  <div id="content" class="question-card">Se incarca...</div>
+</main>
+
+<script src="/common.js"></script>
+<script>
+function currentId() {
+  return new URLSearchParams(location.search).get('id');
+}
+
+async function loadProductSelect() {
+  const res = await fetch('/api/admin/produse');
+  if (res.status === 401) { location.href = '/admin/login.html'; return; }
+  const products = await res.json();
+  const sel = document.getElementById('product-select');
+  const id = currentId();
+  if (!products.length) {
+    sel.innerHTML = '<option>Nu exista produse</option>';
+    return;
+  }
+  sel.innerHTML = products.map(p => `<option value="${p.id}" ${p.id === id ? 'selected' : ''}>${escapeHtml(p.name)} (${escapeHtml(p.sellerName)})</option>`).join('');
+  if (!id) {
+    location.href = '/admin/numere.html?id=' + encodeURIComponent(products[0].id);
+  }
+}
+
+document.getElementById('product-select').addEventListener('change', (e) => {
+  location.href = '/admin/numere.html?id=' + encodeURIComponent(e.target.value);
+});
+
+async function loadNumere() {
+  const id = currentId();
+  const el = document.getElementById('content');
+  if (!id) {
+    el.innerHTML = '<p style="color:#9aa0ab;">Alege un produs din lista de mai sus.</p>';
+    return;
+  }
+  const res = await fetch(`/api/admin/produse/${encodeURIComponent(id)}/numere`);
+  if (res.status === 401) { location.href = '/admin/login.html'; return; }
+  if (res.status === 404) {
+    el.innerHTML = '<p style="color:#9aa0ab;">Produs inexistent.</p>';
+    return;
+  }
+  const data = await res.json();
+  document.getElementById('titlu').textContent = 'Numere - ' + data.product.name;
+
+  const total = data.numbers.length;
+  const achizitionate = data.numbers.filter(n => n.purchased).length;
+
+  if (!total) {
+    el.innerHTML = '<p style="color:#9aa0ab;">Acest produs nu are inca niciun numar in stoc.</p>';
+    return;
+  }
+
+  const perRow = 10;
+  const rows = [];
+  for (let i = 0; i < data.numbers.length; i += perRow) {
+    rows.push(data.numbers.slice(i, i + perRow));
+  }
+
+  el.innerHTML = `
+    <div class="stat-line">${achizitionate} / ${total} numere achizitionate</div>
+    <div class="legend">
+      <span><span class="swatch green"></span>Achizitionat</span>
+      <span><span class="swatch red"></span>Neachizitionat</span>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="numere">
+        <tbody>
+          ${rows.map(row => `
+            <tr>
+              ${row.map(n => {
+                const title = n.purchased
+                  ? `Numar ${n.number} - ${n.buyerName ? escapeHtml(n.buyerName) : 'cumparator'}${n.buyerPhone ? ' - ' + escapeHtml(n.buyerPhone) : ''}`
+                  : `Numar ${n.number} - neachizitionat`;
+                return `<td class="${n.purchased ? 'numar-achizitionat' : 'numar-liber'}" title="${title}">${n.number}</td>`;
+              }).join('')}
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  await fetch('/api/admin/logout', { method: 'POST' });
+  location.href = '/admin/login.html';
+});
+
+loadProductSelect();
+loadNumere();
+setInterval(loadNumere, 7000);
+</script>
+</body>
+</html>

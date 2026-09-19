@@ -380,6 +380,38 @@ app.get('/api/produs/:id/participanti', (req, res) => {
   });
 });
 
+// Toate numerele posibile ale unui produs (1..stock_total), varianta publica:
+// arata pentru fiecare numar daca a fost achizitionat, cu prenumele
+// cumparatorului (fara alte date de contact) pentru cele achizitionate - la
+// fel ca la lista de participanti, dar sub forma de grid complet, ca sa vada
+// clientii si ce numere mai sunt libere.
+app.get('/api/produs/:id/numere', (req, res) => {
+  const product = getProduct(req.params.id);
+  if (!product) return res.status(404).json({ error: 'Produs inexistent.' });
+  const tickets = db
+    .prepare(
+      `SELECT t.number, o.buyer_name
+       FROM tickets t JOIN orders o ON o.id = t.order_id
+       WHERE t.product_id = ?`
+    )
+    .all(product.id);
+  const byNumber = new Map(tickets.map((t) => [t.number, t]));
+  const numbers = [];
+  for (let n = 1; n <= product.stock_total; n++) {
+    const t = byNumber.get(n);
+    numbers.push({
+      number: n,
+      purchased: !!t,
+      firstName: t ? (t.buyer_name || '').trim().split(/\s+/)[0] || 'Anonim' : null,
+    });
+  }
+  res.json({
+    productName: product.name,
+    stockTotal: product.stock_total,
+    numbers,
+  });
+});
+
 app.post('/api/checkout', async (req, res) => {
   try {
     const { productId, name, phone, email } = req.body;

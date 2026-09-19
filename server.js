@@ -1063,6 +1063,37 @@ app.get('/api/admin/produse/:id/export.csv', requireAdmin, (req, res) => {
   res.send(csv);
 });
 
+// Toate numerele posibile ale unui produs (1..stock_total), cu starea lor:
+// achizitionat (legat de o comanda platita) sau neachizitionat inca.
+app.get('/api/admin/produse/:id/numere', requireAdmin, (req, res) => {
+  const product = getProduct(req.params.id);
+  if (!product) return res.status(404).json({ error: 'Produs inexistent.' });
+  const tickets = db
+    .prepare(
+      `SELECT t.number, o.buyer_name, o.buyer_phone, o.id as order_id, o.created_at
+       FROM tickets t JOIN orders o ON o.id = t.order_id
+       WHERE t.product_id = ?`
+    )
+    .all(product.id);
+  const byNumber = new Map(tickets.map((t) => [t.number, t]));
+  const numbers = [];
+  for (let n = 1; n <= product.stock_total; n++) {
+    const t = byNumber.get(n);
+    numbers.push({
+      number: n,
+      purchased: !!t,
+      buyerName: t ? t.buyer_name || null : null,
+      buyerPhone: t ? t.buyer_phone || null : null,
+      orderId: t ? t.order_id : null,
+      purchasedAt: t ? t.created_at : null,
+    });
+  }
+  res.json({
+    product: { id: product.id, name: product.name, stockTotal: product.stock_total },
+    numbers,
+  });
+});
+
 // Webhook Meta pentru WhatsApp: Meta face un GET de verificare o singura
 // data, la configurarea callback-ului in App Dashboard (trebuie sa
 // raspundem cu hub.challenge daca hub.verify_token se potriveste cu

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Numere produs</title>
+<link rel="stylesheet" href="/style.css" />
+<style>
+  .legend { display:flex; align-items:center; gap:18px; margin:14px 0 18px; font-size:0.85rem; color:#9aa0ab; }
+  .legend .swatch { display:inline-block; width:14px; height:14px; border-radius:4px; margin-right:6px; vertical-align:middle; }
+  .swatch.green { background:#1c5c34; }
+  .swatch.red { background:#5c1c1c; }
+  .stat-line { color:#9aa0ab; font-size:0.9rem; margin-bottom:4px; }
+  table.numere { width:100%; border-collapse: separate; border-spacing: 4px; margin-top: 6px; table-layout: fixed; }
+  table.numere td {
+    text-align:center;
+    padding: 8px 4px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight:600;
+    cursor:default;
+  }
+  td.numar-achizitionat { background:#1c5c34; color:#c6f5d6; }
+  td.numar-liber { background:#3a1f1f; color:#ffb3b3; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Numere produs</h1>
+  <p>Toate numerele posibile ale produsului: verde = achizitionat, rosu = inca liber.</p>
+</header>
+<main>
+  <div id="content" class="question-card">Se incarca...</div>
+  <p style="text-align:center;margin-top:16px;"><a href="/" style="color:#6c8cff;">&larr; Inapoi la produse</a></p>
+</main>
+<footer>
+  <div id="site-footer"></div>
+</footer>
+
+<script src="/common.js"></script>
+<script>
+const productId = new URLSearchParams(location.search).get('produs');
+const contentEl = document.getElementById('content');
+
+async function load() {
+  if (!productId) { contentEl.innerHTML = '<p>Produs nespecificat.</p>'; return; }
+  const res = await fetch(`/api/produs/${encodeURIComponent(productId)}/numere`);
+  if (!res.ok) { contentEl.innerHTML = '<p>Produsul nu a fost gasit.</p>'; return; }
+  const data = await res.json();
+  document.getElementById('title').textContent = `Numere — ${data.productName}`;
+
+  const total = data.numbers.length;
+  const achizitionate = data.numbers.filter(n => n.purchased).length;
+
+  if (!total) {
+    contentEl.innerHTML = '<p style="color:#9aa0ab;">Acest produs nu are inca niciun numar in stoc.</p>';
+    return;
+  }
+
+  const perRow = 10;
+  const rows = [];
+  for (let i = 0; i < data.numbers.length; i += perRow) {
+    rows.push(data.numbers.slice(i, i + perRow));
+  }
+
+  contentEl.innerHTML = `
+    <div class="stat-line">${achizitionate} / ${total} numere achizitionate</div>
+    <div class="legend">
+      <span><span class="swatch green"></span>Achizitionat</span>
+      <span><span class="swatch red"></span>Liber</span>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="numere">
+        <tbody>
+          ${rows.map(row => `
+            <tr>
+              ${row.map(n => {
+                const title = n.purchased
+                  ? `Numar ${n.number} - achizitionat de ${n.firstName ? escapeHtml(n.firstName) : 'un client'}`
+                  : `Numar ${n.number} - liber`;
+                return `<td class="${n.purchased ? 'numar-achizitionat' : 'numar-liber'}" title="${title}">${n.number}</td>`;
+              }).join('')}
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+load();
+setInterval(load, 7000);
+</script>
+</body>
+</html>

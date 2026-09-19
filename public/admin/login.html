@@ -36,7 +36,7 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
     });
     const data = await res.json();
     if (data.ok) {
-      location.href = '/admin/comenzi.html';
+      location.href = '/admin/index.html';
     } else {
       document.getElementById('feedback').innerHTML = `<div class="notice error">${data.error || 'Autentificare esuata.'}</div>`;
       button.disabled = false;

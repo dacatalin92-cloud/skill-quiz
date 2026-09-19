@@ -92,7 +92,10 @@ async function loadProducts() {
             <td>${p.orderCount}</td>
             <td>${(p.revenueBani/100).toFixed(2)} RON</td>
             <td><span class="badge ${p.active ? 'on' : 'off'}">${p.active ? 'Activ' : 'Dezactivat'}</span></td>
-            <td>${p.orderCount > 0 ? `<a class="export-btn" style="display:inline-block;text-decoration:none;color:#6c8cff;border:1px solid #2a2e38;border-radius:8px;padding:6px 12px;" href="/api/admin/produse/${p.id}/export.csv">Exporta cumparatori</a>` : '<span style="color:#565c68;font-size:0.8rem;">-</span>'}</td>
+            <td style="white-space:nowrap;">
+              <a class="export-btn" style="display:inline-block;text-decoration:none;color:#6c8cff;border:1px solid #2a2e38;border-radius:8px;padding:6px 12px;margin-right:6px;" href="/admin/numere.html?id=${p.id}">Numere</a>
+              ${p.orderCount > 0 ? `<a class="export-btn" style="display:inline-block;text-decoration:none;color:#6c8cff;border:1px solid #2a2e38;border-radius:8px;padding:6px 12px;" href="/api/admin/produse/${p.id}/export.csv">Exporta cumparatori</a>` : ''}
+            </td>
           </tr>
         `).join('')}
       </tbody>

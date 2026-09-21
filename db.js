@@ -108,6 +108,13 @@ if (!orderColumns.includes('stripe_session_id')) {
   db.exec('ALTER TABLE orders ADD COLUMN stripe_session_id TEXT');
 }
 
+// Migratie usoara: adauga coloana buyer_address - necesara pentru ca
+// factura Oblio emisa automat sa contina si adresa cumparatorului, nu doar
+// nume/telefon/email, pentru bazele de date create inainte de acest camp.
+if (!orderColumns.includes('buyer_address')) {
+  db.exec('ALTER TABLE orders ADD COLUMN buyer_address TEXT');
+}
+
 // Tabel pentru mesajele WhatsApp primite de la clienti (raspunsuri la
 // notificarile automate de produs nou), afisate in panoul de admin.
 db.exec(`

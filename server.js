@@ -86,6 +86,7 @@ async function createInvoiceForOrder(order) {
       buyerName: order.buyer_name,
       buyerEmail: order.buyer_email,
       buyerPhone: order.buyer_phone,
+      buyerAddress: order.buyer_address,
       productName: product.name,
       priceRon: product.price_bani / 100,
       quantity: order.quantity,
@@ -414,7 +415,7 @@ app.get('/api/produs/:id/numere', (req, res) => {
 
 app.post('/api/checkout', async (req, res) => {
   try {
-    const { productId, name, phone, email } = req.body;
+    const { productId, name, phone, email, address } = req.body;
     // Metoda de plata aleasa de client: 'payu' (implicit) sau 'stripe'.
     let paymentMethod = req.body.paymentMethod === 'stripe' ? 'stripe' : 'payu';
     // PayU este ascuns temporar (HIDE_PAYU) - orice cerere care ar folosi PayU
@@ -440,6 +441,10 @@ app.post('/api/checkout', async (req, res) => {
     if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       return res.status(400).json({ error: 'Adresa de email nu este valida.' });
     }
+    // Adresa e optionala - clientul o completeaza doar daca vrea factura cu
+    // datele complete; fara ea, factura Oblio se emite in continuare, doar
+    // fara linia de adresa.
+    const trimmedAddress = address && String(address).trim() ? String(address).trim() : null;
 
     const product = getProduct(productId);
     if (!product || !product.active) return res.status(404).json({ error: 'Produs inexistent.' });
@@ -460,9 +465,9 @@ app.post('/api/checkout', async (req, res) => {
     const feeBani = 0; // Fara marketplace/split - toti banii merg direct in contul PayU al platformei.
 
     db.prepare(
-      `INSERT INTO orders (id, product_id, seller_id, buyer_name, buyer_phone, buyer_email, quantity, attempts_left, amount_bani, platform_fee_bani, payment_method)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(orderId, product.id, seller.id, String(name).trim(), String(phone).trim(), trimmedEmail, quantity, MAX_ATTEMPTS, totalBani, feeBani, paymentMethod);
+      `INSERT INTO orders (id, product_id, seller_id, buyer_name, buyer_phone, buyer_email, buyer_address, quantity, attempts_left, amount_bani, platform_fee_bani, payment_method)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(orderId, product.id, seller.id, String(name).trim(), String(phone).trim(), trimmedEmail, trimmedAddress, quantity, MAX_ATTEMPTS, totalBani, feeBani, paymentMethod);
 
     if (paymentMethod === 'stripe') {
       const { redirectUrl, sessionId } = await stripeClient.createCheckoutSession({
@@ -901,6 +906,7 @@ app.get('/api/vanzator/comenzi', requireSeller, (req, res) => {
       buyerName: o.buyer_name,
       buyerPhone: o.buyer_phone,
       buyerEmail: o.buyer_email,
+      buyerAddress: o.buyer_address,
       quantity: o.quantity,
       status: o.status,
       amountBani: o.amount_bani,
@@ -951,6 +957,7 @@ app.get('/api/admin/comenzi', requireAdmin, (req, res) => {
       buyerName: o.buyer_name,
       buyerPhone: o.buyer_phone,
       buyerEmail: o.buyer_email,
+      buyerAddress: o.buyer_address,
       quantity: o.quantity,
       status: o.status,
       amountBani: o.amount_bani,
@@ -1069,7 +1076,7 @@ app.get('/api/admin/produse/:id/export.csv', requireAdmin, (req, res) => {
     .all(product.id);
 
   const csvField = (value) => `"${String(value == null ? '' : value).replace(/"/g, '""')}"`;
-  const header = ['Data', 'Nume client', 'Telefon', 'Email', 'Cantitate', 'Numere bilete', 'Suma (RON)', 'Status'];
+  const header = ['Data', 'Nume client', 'Telefon', 'Email', 'Adresa', 'Cantitate', 'Numere bilete', 'Suma (RON)', 'Status'];
   const lines = [header.map(csvField).join(',')];
   for (const o of orders) {
     const numbers = orderTicketNumbers(o.id).join('; ');
@@ -1079,6 +1086,7 @@ app.get('/api/admin/produse/:id/export.csv', requireAdmin, (req, res) => {
         o.buyer_name || '',
         o.buyer_phone || '',
         o.buyer_email || '',
+        o.buyer_address || '',
         o.quantity,
         numbers,
         (o.amount_bani / 100).toFixed(2),

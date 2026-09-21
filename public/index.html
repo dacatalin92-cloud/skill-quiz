@@ -91,6 +91,7 @@ async function loadProducts() {
           <input type="text" name="buyerName" placeholder="Numele tau" required />
           <input type="tel" name="buyerPhone" placeholder="Numar de telefon" required />
           <input type="email" name="buyerEmail" placeholder="Email (optional, pentru confirmare)" />
+          <input type="text" name="buyerAddress" placeholder="Adresa (optional, necesara doar pentru factura)" />
           <input type="number" name="quantity" min="1" max="${p.stockRemaining}" value="1" required />
           ${paymentMethods.payu && paymentMethods.stripe ? `
           <div class="payment-method-choice">
@@ -123,6 +124,7 @@ async function startCheckout(event, productId) {
         name: form.buyerName.value,
         phone: form.buyerPhone.value,
         email: form.buyerEmail.value,
+        address: form.buyerAddress.value,
         quantity: parseInt(form.quantity.value, 10),
         paymentMethod: form.paymentMethod ? form.paymentMethod.value : 'payu',
       }),

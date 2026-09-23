@@ -2,7 +2,7 @@
 <html lang="ro">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>Admin - mesaje WhatsApp</title>
 <link rel="manifest" href="/admin/manifest.json" />
 <meta name="theme-color" content="#10131a" />
@@ -12,98 +12,257 @@
 <meta name="apple-mobile-web-app-title" content="WA MaritaShow" />
 <link rel="stylesheet" href="/style.css" />
 <style>
-  .top-bar { max-width:900px; margin: 0 auto; padding: 16px 24px 0; display:flex; justify-content:space-between; align-items:center; gap:12px; }
-  .top-bar button { width:auto; padding:6px 14px; font-size:0.85rem; }
-  .top-bar .nav-links { display:flex; align-items:center; gap:16px; }
-  .top-bar .nav-links a { color:#6c8cff; font-size:0.9rem; }
-  main { max-width: 900px; }
-  .conv { border:1px solid #2a2e38; border-radius:10px; background:#161a23; margin-bottom:16px; overflow:hidden; }
-  .conv-header { padding:10px 14px; font-weight:600; color:#e8eaed; border-bottom:1px solid #2a2e38; }
-  .conv-messages { padding:12px 14px; display:flex; flex-direction:column; gap:8px; max-height:340px; overflow-y:auto; }
-  .bubble { max-width:80%; padding:8px 12px; border-radius:10px; font-size:0.88rem; }
-  .bubble .text { white-space:pre-wrap; }
-  .bubble .time { display:block; font-size:0.7rem; color:#9aa0ab; margin-top:4px; }
-  .bubble.in { align-self:flex-start; background:#1c2333; color:#c7cad1; }
-  .bubble.out { align-self:flex-end; background:#1e3d2b; color:#d7ffe6; }
-  .reply-form { display:flex; gap:8px; padding:10px 14px; border-top:1px solid #2a2e38; }
-  .reply-form textarea { flex:1; resize:vertical; min-height:38px; padding:8px 10px; border-radius:8px; border:1px solid #2a2e38; background:#10131a; color:#e8eaed; font-size:0.88rem; font-family:inherit; }
-  .reply-form button { width:auto; padding:8px 16px; align-self:flex-end; }
-  .reply-feedback { font-size:0.78rem; padding:0 14px 8px; min-height:1em; }
+  html, body { height: 100%; margin: 0; overflow: hidden; background: var(--bg); }
+  #app { height: 100vh; height: 100dvh; display: flex; flex-direction: column; max-width: 640px; margin: 0 auto; background: var(--bg); }
+  .screen { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+
+  /* Lista de conversatii */
+  .app-header { padding: 14px 16px 8px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .app-header-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .app-header-row h1 { margin: 0; font-size: 1.25rem; }
+  .header-actions { display: flex; align-items: center; gap: 12px; font-size: 0.85rem; }
+  .header-actions a { color: var(--accent); text-decoration: none; }
+  .utility-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .ghost-btn { width: auto; padding: 6px 12px; font-size: 0.78rem; background: transparent; border: 1px solid var(--border); color: var(--text); border-radius: 8px; cursor: pointer; }
+  .feedback-line { font-size: 0.78rem; margin-top: 6px; min-height: 1em; }
+
+  .conv-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .conv-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .conv-row:active { background: rgba(255,255,255,0.04); }
+  .conv-avatar { flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%; background: var(--card); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-weight: 600; color: var(--accent); font-size: 0.85rem; }
+  .conv-main { flex: 1; min-width: 0; }
+  .conv-top-line { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .conv-phone { font-weight: 600; font-size: 0.95rem; color: var(--text); }
+  .conv-time { font-size: 0.72rem; color: var(--muted); flex-shrink: 0; }
+  .conv-preview { color: var(--muted); font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .conv-row.unread .conv-preview { color: var(--text); }
+  .conv-unread-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .empty-state { padding: 40px 20px; text-align: center; color: var(--muted); }
+
+  /* Conversatie individuala */
+  .thread-header { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .icon-btn { width: auto; background: transparent; border: none; color: var(--text); font-size: 1.5rem; padding: 4px 10px; cursor: pointer; line-height: 1; }
+  .thread-title { display: flex; flex-direction: column; min-width: 0; }
+  .thread-title .thread-phone-label { font-weight: 600; font-size: 1rem; }
+  .thread-hint { font-size: 0.7rem; color: var(--muted); }
+
+  .thread-messages { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .bubble { max-width: 78%; padding: 8px 12px; border-radius: 14px; font-size: 0.9rem; }
+  .bubble .text { white-space: pre-wrap; word-break: break-word; }
+  .bubble .time { display: block; font-size: 0.68rem; color: #9aa0ab; margin-top: 3px; }
+  .bubble.in { align-self: flex-start; background: #1c2333; color: #c7cad1; border-bottom-left-radius: 4px; }
+  .bubble.out { align-self: flex-end; background: #1e3d2b; color: #d7ffe6; border-bottom-right-radius: 4px; }
+
+  .reply-bar { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); flex-shrink: 0; padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+  .reply-bar textarea { flex: 1; resize: none; max-height: 100px; padding: 9px 12px; border-radius: 18px; border: 1px solid var(--border); background: var(--card); color: var(--text); font-size: 0.9rem; font-family: inherit; }
+  .send-btn { width: auto; padding: 0 18px; border-radius: 18px; }
 </style>
 </head>
 <body>
-<div class="top-bar">
-  <strong>Mesaje WhatsApp primite</strong>
-  <div class="nav-links">
-    <a href="/admin/index.html">&larr; Dashboard</a>
-    <a href="/admin/comenzi.html">Comenzi</a>
-    <button id="logout-btn">Delogare</button>
-  </div>
+<div id="app">
+
+  <section id="screen-list" class="screen">
+    <div class="app-header">
+      <div class="app-header-row">
+        <h1>Mesaje WhatsApp</h1>
+        <div class="header-actions">
+          <a href="/admin/index.html">Dashboard</a>
+          <a href="/admin/comenzi.html">Comenzi</a>
+          <button id="logout-btn" class="ghost-btn">Delogare</button>
+        </div>
+      </div>
+      <div class="utility-row">
+        <button id="push-btn" type="button" class="ghost-btn" onclick="enableAdminPush()">Activeaza notificari</button>
+        <button id="install-btn" type="button" class="ghost-btn" style="display:none;" onclick="installApp()">Instaleaza aplicatia</button>
+      </div>
+      <div id="push-feedback" class="feedback-line"></div>
+    </div>
+    <div id="conv-list" class="conv-list">Se incarca...</div>
+  </section>
+
+  <section id="screen-thread" class="screen" style="display:none;">
+    <div class="thread-header">
+      <button id="back-btn" class="icon-btn" type="button" aria-label="Inapoi">&larr;</button>
+      <div class="thread-title">
+        <span id="thread-phone" class="thread-phone-label">+</span>
+        <span class="thread-hint">Mesaj text liber doar in primele 24h de la ultimul mesaj primit</span>
+      </div>
+    </div>
+    <div id="thread-messages" class="thread-messages"></div>
+    <form id="reply-form" class="reply-bar">
+      <textarea id="reply-text" placeholder="Scrie un raspuns..." rows="1" required></textarea>
+      <button type="submit" class="send-btn">Trimite</button>
+    </form>
+    <div id="reply-feedback" class="feedback-line" style="padding:0 12px 8px;"></div>
+  </section>
+
 </div>
-<header>
-  <h1>Mesaje WhatsApp</h1>
-  <p>Conversatiile cu clientii (ultimele 500 de mesaje) - poti raspunde direct de aici. Pagina se reincarca automat la fiecare 20 secunde. Un mesaj text liber poate fi trimis doar in primele 24h de la ultimul mesaj primit de la acel client; dupa aceea e nevoie de un sablon aprobat.</p>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
-    <button id="push-btn" type="button" onclick="enableAdminPush()" style="width:auto;padding:10px 16px;">Activeaza notificari pe telefon</button>
-    <button id="install-btn" type="button" onclick="installApp()" style="display:none;width:auto;padding:10px 16px;">Instaleaza aplicatia</button>
-  </div>
-  <div id="push-feedback" style="font-size:0.85rem;margin-top:6px;"></div>
-</header>
-<main>
-  <div id="content" class="question-card">Se incarca...</div>
-</main>
 
 <script src="/common.js"></script>
 <script>
-async function load() {
-  const res = await fetch('/api/admin/whatsapp-mesaje');
-  if (res.status === 401) { location.href = '/admin/login.html'; return; }
-  const messages = await res.json();
-  const el = document.getElementById('content');
-  if (!messages.length) {
-    el.innerHTML = '<p style="color:#9aa0ab;">Nu a fost primit inca niciun mesaj.</p>';
-    return;
-  }
+let threads = [];
+let renderedThreadPhone = null;
+let renderedThreadCount = 0;
 
+function getLastSeenMap() {
+  try { return JSON.parse(localStorage.getItem('wa_admin_last_seen') || '{}'); } catch (err) { return {}; }
+}
+function setLastSeen(phone, iso) {
+  try {
+    const map = getLastSeenMap();
+    map[phone] = iso;
+    localStorage.setItem('wa_admin_last_seen', JSON.stringify(map));
+  } catch (err) { /* localStorage indisponibil - ignoram, e doar o comoditate vizuala */ }
+}
+
+function formatTime(iso) {
+  const d = new Date(iso + 'Z');
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) {
+    return d.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' });
+  }
+  const sameYear = d.getFullYear() === now.getFullYear();
+  return d.toLocaleDateString('ro-RO', sameYear ? { day: '2-digit', month: '2-digit' } : { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+function formatBubbleTime(iso) {
+  return new Date(iso + 'Z').toLocaleString('ro-RO');
+}
+
+async function fetchMessages() {
+  const res = await fetch('/api/admin/whatsapp-mesaje');
+  if (res.status === 401) { location.href = '/admin/login.html'; return false; }
+  const messages = await res.json();
+  rebuildThreads(messages);
+  return true;
+}
+
+function rebuildThreads(messages) {
   const byPhone = new Map();
   for (const m of messages) {
     if (!byPhone.has(m.fromPhone)) byPhone.set(m.fromPhone, []);
     byPhone.get(m.fromPhone).push(m);
   }
-  const threads = Array.from(byPhone.entries()).map(([phone, msgs]) => {
+  threads = Array.from(byPhone.entries()).map(([phone, msgs]) => {
     msgs.sort((a, b) => new Date(a.receivedAt) - new Date(b.receivedAt));
-    return { phone, msgs, lastAt: msgs[msgs.length - 1].receivedAt };
+    return { phone, msgs, lastAt: msgs[msgs.length - 1].receivedAt, lastMsg: msgs[msgs.length - 1] };
   });
   threads.sort((a, b) => new Date(b.lastAt) - new Date(a.lastAt));
-
-  el.innerHTML = threads.map((t) => `
-    <div class="conv">
-      <div class="conv-header">+${escapeHtml(t.phone)}</div>
-      <div class="conv-messages">
-        ${t.msgs.map((m) => `
-          <div class="bubble ${m.direction === 'out' ? 'out' : 'in'}">
-            <span class="text">${escapeHtml(m.body)}</span>
-            <span class="time">${new Date(m.receivedAt + 'Z').toLocaleString('ro-RO')}</span>
-          </div>
-        `).join('')}
-      </div>
-      <form class="reply-form" onsubmit="return sendReply(event, '${escapeHtml(t.phone)}')">
-        <textarea placeholder="Scrie un raspuns..." required></textarea>
-        <button type="submit">Trimite</button>
-      </form>
-      <div class="reply-feedback" id="fb-${escapeHtml(t.phone)}"></div>
-    </div>
-  `).join('');
 }
 
-async function sendReply(event, phone) {
+function getRoute() {
+  const m = location.hash.match(/^#\/c\/(.+)$/);
+  return m ? { screen: 'thread', phone: decodeURIComponent(m[1]) } : { screen: 'list' };
+}
+
+function renderRoute() {
+  const route = getRoute();
+  if (route.screen === 'thread') {
+    showThreadScreen(route.phone);
+  } else {
+    showListScreen();
+  }
+}
+
+function showListScreen() {
+  document.getElementById('screen-list').style.display = 'flex';
+  document.getElementById('screen-thread').style.display = 'none';
+  renderedThreadPhone = null;
+  renderList();
+}
+
+function renderList() {
+  const el = document.getElementById('conv-list');
+  if (!threads.length) {
+    el.innerHTML = '<div class="empty-state">Nu a fost primit inca niciun mesaj.</div>';
+    return;
+  }
+  const lastSeen = getLastSeenMap();
+  el.innerHTML = threads.map((t) => {
+    const unread = t.lastMsg.direction !== 'out' && (!lastSeen[t.phone] || new Date(lastSeen[t.phone]) < new Date(t.lastMsg.receivedAt));
+    const initials = t.phone.slice(-2);
+    return `
+      <div class="conv-row${unread ? ' unread' : ''}" data-phone="${escapeHtml(t.phone)}">
+        <div class="conv-avatar">${escapeHtml(initials)}</div>
+        <div class="conv-main">
+          <div class="conv-top-line">
+            <span class="conv-phone">+${escapeHtml(t.phone)}</span>
+            <span class="conv-time">${formatTime(t.lastMsg.receivedAt)}</span>
+          </div>
+          <div class="conv-preview">${t.lastMsg.direction === 'out' ? 'Tu: ' : ''}${escapeHtml(t.lastMsg.body)}</div>
+        </div>
+        ${unread ? '<div class="conv-unread-dot"></div>' : ''}
+      </div>
+    `;
+  }).join('');
+  el.querySelectorAll('.conv-row').forEach((row) => {
+    row.addEventListener('click', () => openThread(row.dataset.phone));
+  });
+}
+
+function openThread(phone) {
+  location.hash = '#/c/' + encodeURIComponent(phone);
+}
+
+function showThreadScreen(phone) {
+  document.getElementById('screen-list').style.display = 'none';
+  document.getElementById('screen-thread').style.display = 'flex';
+  const forceScroll = renderedThreadPhone !== phone;
+  renderedThreadPhone = phone;
+  if (forceScroll) renderedThreadCount = 0;
+  renderThread(phone, forceScroll);
+}
+
+function renderThread(phone, forceScroll) {
+  document.getElementById('thread-phone').textContent = '+' + phone;
+  document.getElementById('reply-form').dataset.phone = phone;
+  const thread = threads.find((t) => t.phone === phone);
+  renderThreadMessages(thread, forceScroll);
+  if (thread) setLastSeen(phone, thread.lastAt);
+}
+
+function renderThreadMessages(thread, forceScroll) {
+  const el = document.getElementById('thread-messages');
+  if (!thread) {
+    el.innerHTML = '<div class="empty-state">Aceasta conversatie nu mai exista.</div>';
+    renderedThreadCount = 0;
+    return;
+  }
+  if (!forceScroll && thread.msgs.length === renderedThreadCount) return;
+  const nearBottomBefore = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  el.innerHTML = thread.msgs.map((m) => `
+    <div class="bubble ${m.direction === 'out' ? 'out' : 'in'}">
+      <span class="text">${escapeHtml(m.body)}</span>
+      <span class="time">${formatBubbleTime(m.receivedAt)}</span>
+    </div>
+  `).join('');
+  renderedThreadCount = thread.msgs.length;
+  if (forceScroll || nearBottomBefore) {
+    el.scrollTop = el.scrollHeight;
+  }
+}
+
+document.getElementById('back-btn').addEventListener('click', () => { location.hash = '#/'; });
+
+const replyTextarea = document.getElementById('reply-text');
+replyTextarea.addEventListener('input', () => {
+  replyTextarea.style.height = 'auto';
+  replyTextarea.style.height = Math.min(replyTextarea.scrollHeight, 100) + 'px';
+});
+replyTextarea.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    document.getElementById('reply-form').requestSubmit();
+  }
+});
+
+document.getElementById('reply-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const form = event.target;
-  const textarea = form.querySelector('textarea');
+  const phone = form.dataset.phone;
   const btn = form.querySelector('button');
-  const fb = document.getElementById('fb-' + phone);
-  const text = textarea.value.trim();
-  if (!text) return false;
+  const fb = document.getElementById('reply-feedback');
+  const text = replyTextarea.value.trim();
+  if (!text || !phone) return;
   btn.disabled = true;
   fb.textContent = '';
   try {
@@ -112,21 +271,31 @@ async function sendReply(event, phone) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ toPhone: phone, body: text }),
     });
-    if (res.status === 401) { location.href = '/admin/login.html'; return false; }
+    if (res.status === 401) { location.href = '/admin/login.html'; return; }
     const data = await res.json();
     if (!res.ok || !data.ok) {
       fb.textContent = data.error || 'Eroare la trimitere.';
-      fb.style.color = '#ff8080';
+      fb.style.color = 'var(--bad)';
       btn.disabled = false;
-      return false;
+      return;
     }
-    await load();
+    replyTextarea.value = '';
+    replyTextarea.style.height = 'auto';
+    await fetchMessages();
+    renderThread(phone, true);
   } catch (err) {
     fb.textContent = 'Eroare de retea. Incearca din nou.';
-    fb.style.color = '#ff8080';
-    btn.disabled = false;
+    fb.style.color = 'var(--bad)';
   }
-  return false;
+  btn.disabled = false;
+});
+
+window.addEventListener('hashchange', renderRoute);
+
+async function refresh() {
+  const ok = await fetchMessages();
+  if (ok === false) return;
+  renderRoute();
 }
 
 document.getElementById('logout-btn').addEventListener('click', async () => {
@@ -150,7 +319,7 @@ async function enableAdminPush() {
   const fb = document.getElementById('push-feedback');
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
     fb.textContent = 'Browserul tau nu suporta notificari push.';
-    fb.style.color = '#ff8080';
+    fb.style.color = 'var(--bad)';
     return;
   }
   btn.disabled = true;
@@ -159,7 +328,7 @@ async function enableAdminPush() {
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
       fb.textContent = 'Trebuie sa permiti notificarile din browser ca sa functioneze.';
-      fb.style.color = '#ff8080';
+      fb.style.color = 'var(--bad)';
       btn.disabled = false;
       return;
     }
@@ -167,7 +336,7 @@ async function enableAdminPush() {
     const keyData = await keyRes.json();
     if (!keyData.publicKey) {
       fb.textContent = 'Notificarile push nu sunt configurate momentan pe server.';
-      fb.style.color = '#ff8080';
+      fb.style.color = 'var(--bad)';
       btn.disabled = false;
       return;
     }
@@ -182,17 +351,17 @@ async function enableAdminPush() {
     });
     if (res.status === 401) { location.href = '/admin/login.html'; return; }
     fb.textContent = 'Notificarile sunt active! Vei primi alerta pe telefon la fiecare mesaj WhatsApp nou.';
-    fb.style.color = '#a4f0bb';
+    fb.style.color = 'var(--good)';
     btn.textContent = 'Notificari active';
   } catch (err) {
     fb.textContent = 'Eroare la activarea notificarilor.';
-    fb.style.color = '#ff8080';
+    fb.style.color = 'var(--bad)';
     btn.disabled = false;
   }
 }
 
 let deferredInstallPrompt = null;
-window.addEventListener('beforeinstallprompt', function(e) {
+window.addEventListener('beforeinstallprompt', function (e) {
   e.preventDefault();
   deferredInstallPrompt = e;
   const installBtn = document.getElementById('install-btn');
@@ -207,8 +376,8 @@ async function installApp() {
   document.getElementById('install-btn').style.display = 'none';
 }
 
-load();
-setInterval(load, 20000);
+refresh().then(renderRoute);
+setInterval(refresh, 8000);
 </script>
 </body>
 </html>

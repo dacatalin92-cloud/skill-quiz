@@ -115,6 +115,15 @@ if (!orderColumns.includes('buyer_address')) {
   db.exec('ALTER TABLE orders ADD COLUMN buyer_address TEXT');
 }
 
+// Migratie usoara: adauga coloana reminder_24h_sent, folosita de task-ul
+// periodic care trimite pe WhatsApp un reminder cu stocul ramas si poza
+// produsului. Se aplica si comenzilor deja existente (nu doar celor noi) -
+// coloana porneste pe 0 pentru toate, asa ca la prima rulare task-ul le va
+// trimite si celor care au cumparat deja, o singura data.
+if (!orderColumns.includes('reminder_24h_sent')) {
+  db.exec('ALTER TABLE orders ADD COLUMN reminder_24h_sent INTEGER NOT NULL DEFAULT 0');
+}
+
 // Tabel pentru mesajele WhatsApp primite de la clienti (raspunsuri la
 // notificarile automate de produs nou), afisate in panoul de admin.
 db.exec(`

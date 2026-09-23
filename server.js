@@ -66,7 +66,7 @@ const stripeClient = stripeConfigured
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const RESEND_FROM = process.env.RESEND_FROM || 'onboarding@resend.dev';
-const mailer = makeMailer({ apiKey: RESEND_API_KEY, from: RESEND_FROM }); const META_WHATSAPP_TOKEN = process.env.META_WHATSAPP_TOKEN || ''; const META_PHONE_NUMBER_ID = process.env.META_PHONE_NUMBER_ID || ''; const META_WHATSAPP_TEMPLATE = process.env.META_WHATSAPP_TEMPLATE || 'produs_nou_disponibil'; const META_WHATSAPP_LANG = process.env.META_WHATSAPP_LANG || 'ro'; const whatsappConfigured = !!(META_WHATSAPP_TOKEN && META_PHONE_NUMBER_ID); const whatsapp = whatsappConfigured ? makeWhatsapp({ accessToken: META_WHATSAPP_TOKEN, phoneNumberId: META_PHONE_NUMBER_ID, templateName: META_WHATSAPP_TEMPLATE, languageCode: META_WHATSAPP_LANG }) : null; const WHATSAPP_WEBHOOK_VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || ''; const PUSH_VAPID_PUBLIC_KEY = process.env.PUSH_VAPID_PUBLIC_KEY || ''; const PUSH_VAPID_PRIVATE_KEY = process.env.PUSH_VAPID_PRIVATE_KEY || ''; const PUSH_VAPID_SUBJECT = process.env.PUSH_VAPID_SUBJECT || 'mailto:aromaprodcom@gmail.com'; const pushConfigured = !!(PUSH_VAPID_PUBLIC_KEY && PUSH_VAPID_PRIVATE_KEY); const push = pushConfigured ? makePush({ publicKey: PUSH_VAPID_PUBLIC_KEY, privateKey: PUSH_VAPID_PRIVATE_KEY, subject: PUSH_VAPID_SUBJECT }) : null;
+const mailer = makeMailer({ apiKey: RESEND_API_KEY, from: RESEND_FROM }); const META_WHATSAPP_TOKEN = process.env.META_WHATSAPP_TOKEN || ''; const META_PHONE_NUMBER_ID = process.env.META_PHONE_NUMBER_ID || ''; const META_WHATSAPP_TEMPLATE = process.env.META_WHATSAPP_TEMPLATE || 'produs_nou_disponibil'; const META_WHATSAPP_REMINDER_TEMPLATE = process.env.META_WHATSAPP_REMINDER_TEMPLATE || 'reminder_stoc_disponibil'; const META_WHATSAPP_LANG = process.env.META_WHATSAPP_LANG || 'ro'; const whatsappConfigured = !!(META_WHATSAPP_TOKEN && META_PHONE_NUMBER_ID); const whatsapp = whatsappConfigured ? makeWhatsapp({ accessToken: META_WHATSAPP_TOKEN, phoneNumberId: META_PHONE_NUMBER_ID, templateName: META_WHATSAPP_TEMPLATE, languageCode: META_WHATSAPP_LANG }) : null; const WHATSAPP_WEBHOOK_VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || ''; const PUSH_VAPID_PUBLIC_KEY = process.env.PUSH_VAPID_PUBLIC_KEY || ''; const PUSH_VAPID_PRIVATE_KEY = process.env.PUSH_VAPID_PRIVATE_KEY || ''; const PUSH_VAPID_SUBJECT = process.env.PUSH_VAPID_SUBJECT || 'mailto:aromaprodcom@gmail.com'; const pushConfigured = !!(PUSH_VAPID_PUBLIC_KEY && PUSH_VAPID_PRIVATE_KEY); const push = pushConfigured ? makePush({ publicKey: PUSH_VAPID_PUBLIC_KEY, privateKey: PUSH_VAPID_PRIVATE_KEY, subject: PUSH_VAPID_SUBJECT }) : null;
 
 const OBLIO_EMAIL = process.env.OBLIO_EMAIL || '';
 const OBLIO_SECRET = process.env.OBLIO_SECRET || '';
@@ -127,6 +127,53 @@ async function notifyAdminNewWhatsappMessage(fromPhone, body) {
 }
 
 function getNotificationPhones() { const subs = db.prepare('SELECT phone FROM subscribers').all().map((r) => r.phone); const buyers = db.prepare("SELECT DISTINCT buyer_phone as phone FROM orders WHERE buyer_phone IS NOT NULL AND status IN ('paid','locked','unlocked')").all().map((r) => r.phone); return [...new Set([...subs, ...buyers].filter(Boolean))]; } async function notifyNewProduct(product) { if (!whatsapp) return; const phones = getNotificationPhones(); const priceText = (product.price_bani / 100).toFixed(2) + ' RON'; const link = BASE_URL + '/'; for (const phone of phones) { try { await whatsapp.sendTemplate(phone, [product.name, priceText, link]); } catch (err) { console.error('Nu am putut trimite WhatsApp catre ' + phone + ':', err.message); } } } async function notifyPushSubscribers(product) { if (!push) return; const subs = db.prepare('SELECT * FROM push_subscriptions').all(); const priceText = (product.price_bani / 100).toFixed(2) + ' RON'; const payload = { title: 'Produs nou: ' + product.name, body: priceText + ' - stoc limitat!', url: BASE_URL + '/' }; for (const sub of subs) { try { await push.sendToSubscription(sub, payload); } catch (err) { if (err.statusCode === 404 || err.statusCode === 410) { db.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(sub.id); } else { console.error('Nu am putut trimite push catre ' + sub.id + ':', err.message); } } } }
+
+// Reminder WhatsApp la 24h de la achizitie: catre fiecare cumparator cu un
+// numar de telefon valid, care a platit o comanda acum cel putin 24h si nu a
+// primit inca acest mesaj, trimitem un sablon cu poza produsului cumparat si
+// cate numere mai sunt disponibile din el - ca sa il incurajam sa mai prinda
+// cateva inainte sa se epuizeze stocul. Se aplica si comenzilor mai vechi
+// (deja existente inainte de aceasta functie) - la prima rulare vor primi
+// toate cate un singur reminder, iar de acolo inainte doar cele noi, la 24h.
+async function checkAndSendPurchaseReminders() {
+  if (!whatsapp) return;
+  const rows = db
+    .prepare(
+      `SELECT o.*, p.name as product_name, p.image_path, p.stock_total, p.id as product_id
+       FROM orders o
+       JOIN products p ON p.id = o.product_id
+       WHERE o.status IN ('paid','locked','unlocked')
+         AND o.reminder_24h_sent = 0
+         AND o.buyer_phone IS NOT NULL
+         AND o.created_at <= datetime('now', '-24 hours')`
+    )
+    .all();
+  for (const o of rows) {
+    try {
+      const assigned = ticketsAssignedCount(o.product_id);
+      const remaining = Math.max(0, o.stock_total - assigned);
+      if (remaining <= 0) {
+        // Stoc epuizat - nu mai are sens un reminder de "mai prinde cateva
+        // numere", asa ca marcam comanda ca gestionata, fara sa trimitem.
+        db.prepare('UPDATE orders SET reminder_24h_sent = 1 WHERE id = ?').run(o.id);
+        continue;
+      }
+      const firstName = (o.buyer_name || '').trim().split(/\s+/)[0] || 'prieten';
+      const imageUrl = o.image_path
+        ? `${BASE_URL}/uploads/images/${path.basename(o.image_path)}`
+        : `${BASE_URL}/img/placeholder.svg`;
+      await whatsapp.sendTemplate(
+        o.buyer_phone,
+        [firstName, o.product_name, String(remaining)],
+        { headerImageUrl: imageUrl, templateName: META_WHATSAPP_REMINDER_TEMPLATE }
+      );
+      db.prepare('UPDATE orders SET reminder_24h_sent = 1 WHERE id = ?').run(o.id);
+    } catch (err) {
+      console.error('Nu am putut trimite reminder WhatsApp pentru comanda ' + o.id + ':', err.message);
+      // Nu marcam reminder_24h_sent - reincercam la urmatoarea verificare.
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Notificare PayU - body RAW (necesar pentru verificarea semnaturii), definit
@@ -1238,5 +1285,15 @@ app.listen(PORT, () => {
   if (!oblio) console.warn('ATENTIE: variabilele OBLIO_* lipsesc din .env - facturarea automata este dezactivata.');
   if (!whatsapp) console.warn('ATENTIE: variabilele META_WHATSAPP_TOKEN / META_PHONE_NUMBER_ID lipsesc din .env - notificarile WhatsApp la produs nou sunt dezactivate.');
   if (!WHATSAPP_WEBHOOK_VERIFY_TOKEN) console.warn('ATENTIE: WHATSAPP_WEBHOOK_VERIFY_TOKEN lipseste din .env - webhook-ul de primire mesaje WhatsApp nu va putea fi verificat de Meta.');
+  if (whatsapp) {
+    // Verificam din 15 in 15 minute daca exista comenzi mai vechi de 24h
+    // care nu au primit inca reminder-ul WhatsApp cu stocul ramas.
+    checkAndSendPurchaseReminders().catch((err) => console.error('Eroare la reminder-ul WhatsApp de 24h:', err.message));
+    setInterval(() => {
+      checkAndSendPurchaseReminders().catch((err) => console.error('Eroare la reminder-ul WhatsApp de 24h:', err.message));
+    }, 15 * 60 * 1000);
+  } else {
+    console.warn('ATENTIE: reminder-ul WhatsApp de 24h este dezactivat (WhatsApp neconfigurat).');
+  }
 });
 

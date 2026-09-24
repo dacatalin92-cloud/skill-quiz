@@ -1022,6 +1022,41 @@ app.get('/api/admin/comenzi', requireAdmin, (req, res) => {
 // numerele lor valabile la Concursul de abilitate si stocul ramas la
 // produsul cumparat - folosit pentru a recupera clientii care nu au primit
 // inca aceasta confirmare si pentru a crea urgenta legata de stocul limitat.
+// Tinem evidenta emailurilor trimise cu succes intr-un tabel separat, ca
+// endpointul sa poata fi rulat din nou (ex. dupa ce se reseteaza limita
+// zilnica de trimitere Resend) fara sa trimita a doua oara catre cei care
+// au primit deja mesajul.
+db.exec('CREATE TABLE IF NOT EXISTS bulk_numere_sent (email TEXT PRIMARY KEY, sent_at TEXT)');
+
+// Migrare unica: prima trimitere (inainte sa existe tabelul de mai sus) a
+// reusit pentru primii 202 clienti (in ordine cronologica a comenzilor),
+// restul de 145 au picat din cauza limitei zilnice Resend. Ii marcam aici
+// o singura data ca "deja trimisi", ca reluarea de mai jos sa continue
+// automat doar cu cei care nu au primit inca acest email.
+(function migrareInitialaBulkNumereSent() {
+  const deja = db.prepare('SELECT COUNT(*) as c FROM bulk_numere_sent').get().c;
+  if (deja > 0) return;
+  const rows = db
+    .prepare(
+      `SELECT o.buyer_email
+       FROM orders o
+       WHERE o.status IN ('paid','locked','unlocked') AND o.buyer_email IS NOT NULL AND o.buyer_email <> ''
+       ORDER BY o.created_at ASC`
+    )
+    .all();
+  const vazute = new Set();
+  const emailuri = [];
+  for (const o of rows) {
+    const email = o.buyer_email.trim().toLowerCase();
+    if (!email.includes('@') || vazute.has(email)) continue;
+    vazute.add(email);
+    emailuri.push(email);
+  }
+  const NUMAR_DEJA_TRIMISE = 202;
+  const insert = db.prepare("INSERT OR IGNORE INTO bulk_numere_sent (email, sent_at) VALUES (?, datetime('now'))");
+  for (const email of emailuri.slice(0, NUMAR_DEJA_TRIMISE)) insert.run(email);
+})();
+
 app.post('/api/admin/trimite-mail-numere', requireAdmin, (req, res) => {
   if (!mailer) return res.status(400).json({ ok: false, error: 'Email-ul nu este configurat (RESEND_API_KEY).' });
 
@@ -1034,6 +1069,8 @@ app.post('/api/admin/trimite-mail-numere', requireAdmin, (req, res) => {
        ORDER BY o.created_at ASC`
     )
     .all();
+
+  const alreadySent = new Set(db.prepare('SELECT email FROM bulk_numere_sent').all().map((r) => r.email));
 
   // Grupam comenzile pe email (normalizat), ca un client cu mai multe
   // comenzi/produse sa primeasca un singur email cu toate numerele lui.
@@ -1056,18 +1093,24 @@ app.post('/api/admin/trimite-mail-numere', requireAdmin, (req, res) => {
     entry.products.get(o.product_id).numbers.push(...orderTicketNumbers(o.id));
   }
 
-  const list = Array.from(byEmail.entries());
+  const fullList = Array.from(byEmail.entries());
+  const list = fullList.filter(([email]) => !alreadySent.has(email));
+
   res.json({
     ok: true,
-    total: list.length,
+    total: fullList.length,
+    deTrimisAcum: list.length,
+    deacumTrimise: fullList.length - list.length,
     message: 'Trimiterea a pornit in fundal - verifica jurnalele serverului pentru progres.',
   });
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const markSent = db.prepare("INSERT OR REPLACE INTO bulk_numere_sent (email, sent_at) VALUES (?, datetime('now'))");
 
   (async () => {
     let sent = 0;
     let failed = 0;
+    let stoppedEarly = false;
     for (const [email, data] of list) {
       const firstName = (data.name || '').trim().split(/\s+/)[0] || '';
       const blocks = Array.from(data.products.values())
@@ -1093,13 +1136,26 @@ app.post('/api/admin/trimite-mail-numere', requireAdmin, (req, res) => {
           `,
         });
         sent += 1;
+        markSent.run(email);
       } catch (err) {
         failed += 1;
         console.error('Nu am putut trimite emailul cu numere catre ' + email + ':', err.message);
+        // Daca Resend a raspuns cu limita zilnica atinsa, restul emailurilor
+        // vor primi acelasi refuz - ne oprim aici in loc sa le mai incercam
+        // pe toate una cate una. La urmatoarea rulare se continua automat
+        // doar cu cei care nu au primit inca emailul (vezi tabelul de mai sus).
+        if (String((err && err.message) || '').includes('daily_quota_exceeded')) {
+          stoppedEarly = true;
+          break;
+        }
       }
       await sleep(550);
     }
-    console.log(`Trimitere bulk numere terminata: ${sent} trimise, ${failed} esuate din ${list.length}.`);
+    console.log(
+      `Trimitere bulk numere terminata: ${sent} trimise, ${failed} esuate` +
+        (stoppedEarly ? ' (oprit - limita zilnica Resend atinsa)' : '') +
+        ` din ${list.length} de trimis acum (${fullList.length - list.length} primisera deja acest email anterior).`
+    );
   })();
 });
 

@@ -1017,6 +1017,92 @@ app.get('/api/admin/comenzi', requireAdmin, (req, res) => {
   );
 });
 
+// Trimite (o singura data, la cerere din panoul de admin) un email
+// personalizat catre toti clientii care au facut deja o achizitie, cu
+// numerele lor valabile la Concursul de abilitate si stocul ramas la
+// produsul cumparat - folosit pentru a recupera clientii care nu au primit
+// inca aceasta confirmare si pentru a crea urgenta legata de stocul limitat.
+app.post('/api/admin/trimite-mail-numere', requireAdmin, (req, res) => {
+  if (!mailer) return res.status(400).json({ ok: false, error: 'Email-ul nu este configurat (RESEND_API_KEY).' });
+
+  const rows = db
+    .prepare(
+      `SELECT o.id, o.buyer_name, o.buyer_email, o.product_id, p.name as product_name, p.stock_total
+       FROM orders o
+       JOIN products p ON p.id = o.product_id
+       WHERE o.status IN ('paid','locked','unlocked') AND o.buyer_email IS NOT NULL AND o.buyer_email <> ''
+       ORDER BY o.created_at ASC`
+    )
+    .all();
+
+  // Grupam comenzile pe email (normalizat), ca un client cu mai multe
+  // comenzi/produse sa primeasca un singur email cu toate numerele lui.
+  const byEmail = new Map();
+  for (const o of rows) {
+    const email = o.buyer_email.trim().toLowerCase();
+    if (!email.includes('@')) continue;
+    if (!byEmail.has(email)) byEmail.set(email, { name: o.buyer_name, products: new Map() });
+    const entry = byEmail.get(email);
+    if (!entry.name && o.buyer_name) entry.name = o.buyer_name;
+    if (!entry.products.has(o.product_id)) {
+      const assigned = ticketsAssignedCount(o.product_id);
+      entry.products.set(o.product_id, {
+        name: o.product_name,
+        remaining: Math.max(0, o.stock_total - assigned),
+        stockTotal: o.stock_total,
+        numbers: [],
+      });
+    }
+    entry.products.get(o.product_id).numbers.push(...orderTicketNumbers(o.id));
+  }
+
+  const list = Array.from(byEmail.entries());
+  res.json({
+    ok: true,
+    total: list.length,
+    message: 'Trimiterea a pornit in fundal - verifica jurnalele serverului pentru progres.',
+  });
+
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  (async () => {
+    let sent = 0;
+    let failed = 0;
+    for (const [email, data] of list) {
+      const firstName = (data.name || '').trim().split(/\s+/)[0] || '';
+      const blocks = Array.from(data.products.values())
+        .map(
+          (p) => `
+        <p>
+          <strong>${escapeHtml(p.name)}</strong> - numarul (numerele) dumneavoastra: <strong>${p.numbers.join(', ')}</strong><br/>
+          Stoc ramas: ${p.remaining} din ${p.stockTotal} disponibile
+        </p>`
+        )
+        .join('');
+      try {
+        await mailer.sendEmail({
+          to: email,
+          subject: 'Numerele tale la Concursul de abilitate - stocul se epuizeaza in curand',
+          html: `
+            <p>Buna ziua${firstName ? ', ' + escapeHtml(firstName) : ''}!</p>
+            <p>Ne-am intors la dumneavoastra cu numerele valabile pentru Concursul de abilitate:</p>
+            ${blocks}
+            <p>Va uram succes! Ramaneti cu ochii pe telefon - stocul se epuizeaza in curand.</p>
+            <p>Daca mai vreti sa prindeti cateva numere inainte sa se termine stocul, ne gasiti pe <a href="${BASE_URL}/">${BASE_URL}</a>.</p>
+            <p>Cu succes,<br/>Echipa Marita Show</p>
+          `,
+        });
+        sent += 1;
+      } catch (err) {
+        failed += 1;
+        console.error('Nu am putut trimite emailul cu numere catre ' + email + ':', err.message);
+      }
+      await sleep(550);
+    }
+    console.log(`Trimitere bulk numere terminata: ${sent} trimise, ${failed} esuate din ${list.length}.`);
+  })();
+});
+
 // Lista tuturor vanzatorilor inregistrati, cu numarul de produse (active/
 // total) - ca sa poata fi gestionati (ex. dezactivat produsele unui cont)
 // din panoul de admin.
@@ -1296,4 +1382,3 @@ app.listen(PORT, () => {
     console.warn('ATENTIE: reminder-ul WhatsApp de 24h este dezactivat (WhatsApp neconfigurat).');
   }
 });
-

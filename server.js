@@ -16,7 +16,7 @@ const { makeStripe } = require('./lib/stripe');
 const { makeMailer, escapeHtml } = require('./lib/mailer');
 const { generateQuestion } = require('./lib/questionGenerator');
 const { renderTicketSvg } = require('./lib/ticketImage');
-const { streamTicketsPdf } = require('./lib/ticketPdf'); const { makeWhatsapp, normalizePhone } = require('./lib/whatsapp'); const { makePush } = require('./lib/push');
+const { streamTicketsPdf } = require('./lib/ticketPdf'); const { makeWhatsapp, normalizePhone, isPlausiblePhone } = require('./lib/whatsapp'); const { makePush } = require('./lib/push');
 const { makeOblio } = require('./lib/oblio');
 
 const app = express();
@@ -66,7 +66,7 @@ const stripeClient = stripeConfigured
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const RESEND_FROM = process.env.RESEND_FROM || 'onboarding@resend.dev';
-const mailer = makeMailer({ apiKey: RESEND_API_KEY, from: RESEND_FROM }); const META_WHATSAPP_TOKEN = process.env.META_WHATSAPP_TOKEN || ''; const META_PHONE_NUMBER_ID = process.env.META_PHONE_NUMBER_ID || ''; const META_WHATSAPP_TEMPLATE = process.env.META_WHATSAPP_TEMPLATE || 'produs_nou_disponibil'; const META_WHATSAPP_REMINDER_TEMPLATE = process.env.META_WHATSAPP_REMINDER_TEMPLATE || 'reminder_stoc_disponibil'; const META_WHATSAPP_LANG = process.env.META_WHATSAPP_LANG || 'ro'; const whatsappConfigured = !!(META_WHATSAPP_TOKEN && META_PHONE_NUMBER_ID); const whatsapp = whatsappConfigured ? makeWhatsapp({ accessToken: META_WHATSAPP_TOKEN, phoneNumberId: META_PHONE_NUMBER_ID, templateName: META_WHATSAPP_TEMPLATE, languageCode: META_WHATSAPP_LANG }) : null; const WHATSAPP_WEBHOOK_VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || ''; const PUSH_VAPID_PUBLIC_KEY = process.env.PUSH_VAPID_PUBLIC_KEY || ''; const PUSH_VAPID_PRIVATE_KEY = process.env.PUSH_VAPID_PRIVATE_KEY || ''; const PUSH_VAPID_SUBJECT = process.env.PUSH_VAPID_SUBJECT || 'mailto:aromaprodcom@gmail.com'; const pushConfigured = !!(PUSH_VAPID_PUBLIC_KEY && PUSH_VAPID_PRIVATE_KEY); const push = pushConfigured ? makePush({ publicKey: PUSH_VAPID_PUBLIC_KEY, privateKey: PUSH_VAPID_PRIVATE_KEY, subject: PUSH_VAPID_SUBJECT }) : null;
+const mailer = makeMailer({ apiKey: RESEND_API_KEY, from: RESEND_FROM }); const META_WHATSAPP_TOKEN = process.env.META_WHATSAPP_TOKEN || ''; const META_PHONE_NUMBER_ID = process.env.META_PHONE_NUMBER_ID || ''; const META_WHATSAPP_TEMPLATE = process.env.META_WHATSAPP_TEMPLATE || 'produs_nou_disponibil'; const META_WHATSAPP_REMINDER_TEMPLATE = process.env.META_WHATSAPP_REMINDER_TEMPLATE || 'reminder_stoc_disponibil'; const META_WHATSAPP_TICKET_TEMPLATE = process.env.META_WHATSAPP_TICKET_TEMPLATE || 'bilet_digital_livrare'; const META_WHATSAPP_LANG = process.env.META_WHATSAPP_LANG || 'ro'; const whatsappConfigured = !!(META_WHATSAPP_TOKEN && META_PHONE_NUMBER_ID); const whatsapp = whatsappConfigured ? makeWhatsapp({ accessToken: META_WHATSAPP_TOKEN, phoneNumberId: META_PHONE_NUMBER_ID, templateName: META_WHATSAPP_TEMPLATE, languageCode: META_WHATSAPP_LANG }) : null; const WHATSAPP_WEBHOOK_VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || ''; const PUSH_VAPID_PUBLIC_KEY = process.env.PUSH_VAPID_PUBLIC_KEY || ''; const PUSH_VAPID_PRIVATE_KEY = process.env.PUSH_VAPID_PRIVATE_KEY || ''; const PUSH_VAPID_SUBJECT = process.env.PUSH_VAPID_SUBJECT || 'mailto:aromaprodcom@gmail.com'; const pushConfigured = !!(PUSH_VAPID_PUBLIC_KEY && PUSH_VAPID_PRIVATE_KEY); const push = pushConfigured ? makePush({ publicKey: PUSH_VAPID_PUBLIC_KEY, privateKey: PUSH_VAPID_PRIVATE_KEY, subject: PUSH_VAPID_SUBJECT }) : null;
 
 const OBLIO_EMAIL = process.env.OBLIO_EMAIL || '';
 const OBLIO_SECRET = process.env.OBLIO_SECRET || '';
@@ -100,6 +100,16 @@ async function createInvoiceForOrder(order) {
 }
 
 const upload = makeImageUploader();
+
+// Curatare unica: elimina din abonati orice "numar de telefon" clar invalid
+// (contine litere - ex. un link lipit din greseala inainte sa existe
+// verificarea stricta de mai jos). Altfel ar continua sa fie incercat, fara
+// succes, la fiecare notificare WhatsApp viitoare de produs nou.
+try {
+  db.prepare("DELETE FROM subscribers WHERE phone GLOB '*[a-zA-Z]*'").run();
+} catch (err) {
+  console.error('Eroare la curatarea abonatilor cu numar de telefon invalid:', err.message);
+}
 
 // Trimite o notificare push (ca de aplicatie, pe telefon) catre adminul care
 // a instalat panoul de mesaje WhatsApp si a activat notificarile, de fiecare
@@ -175,6 +185,32 @@ async function checkAndSendPurchaseReminders() {
   }
 }
 
+// Trimite biletul digital (PDF) pe WhatsApp, ca antet de tip document al
+// sablonului bilet_digital_livrare. Apelata doar dupa ce clientul a
+// raspuns corect la intrebarea de verificare (acelasi moment in care se
+// genereaza download_token-ul) - niciodata la plata - ca sa respectam
+// aceeasi conditie de deblocare ca cea de pe pagina de descarcare. Link-ul
+// de document foloseste ruta interna /interno/bilet-whatsapp/:token (nu
+// /descarca/:token), ca sa nu consume din limita de descarcari a clientului
+// atunci cand Meta descarca fisierul ca sa il livreze.
+async function sendTicketWhatsapp(order, token) {
+  if (!whatsapp) return;
+  if (!isPlausiblePhone(order.buyer_phone)) return;
+  try {
+    const product = getProduct(order.product_id);
+    if (!product) return;
+    const firstName = (order.buyer_name || '').trim().split(/\s+/)[0] || 'prieten';
+    const documentUrl = `${BASE_URL}/interno/bilet-whatsapp/${token}`;
+    await whatsapp.sendTemplate(order.buyer_phone, [firstName, product.name], {
+      headerDocumentUrl: documentUrl,
+      headerDocumentFilename: 'bilete.pdf',
+      templateName: META_WHATSAPP_TICKET_TEMPLATE,
+    });
+  } catch (err) {
+    console.error('Nu am putut trimite biletul pe WhatsApp pentru comanda ' + order.id + ':', err.message);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Notificare PayU - body RAW (necesar pentru verificarea semnaturii), definit
 // inainte de express.json(). PayU trimite un POST la notifyUrl de fiecare
@@ -243,7 +279,7 @@ app.post('/stripe/webhook', express.raw({ type: '*/*' }), (req, res) => {
   }
 });
 
-app.use(express.json()); app.post('/api/abonare', (req, res) => { const digits = req.body && req.body.phone ? String(req.body.phone).replace(/\D/g, '') : ''; if (!digits || digits.length < 9) { return res.status(400).json({ error: 'Un numar de telefon valid este obligatoriu.' }); } try { db.prepare('INSERT OR IGNORE INTO subscribers (id, phone) VALUES (?, ?)').run(uuidv4(), String(req.body.phone).trim()); res.json({ ok: true }); } catch (err) { console.error(err); res.status(500).json({ error: 'Eroare la abonare.' }); } }); app.get('/api/push/public-key', (req, res) => { res.json({ publicKey: pushConfigured ? PUSH_VAPID_PUBLIC_KEY : null }); }); app.get('/api/payment-methods', (req, res) => { res.json({ payu: !!payu && !HIDE_PAYU, stripe: !!stripeClient }); }); app.post('/api/push/subscribe', (req, res) => { const sub = req.body; if (!sub || !sub.endpoint || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) { return res.status(400).json({ error: 'Abonament push invalid.' }); } try { db.prepare('INSERT INTO push_subscriptions (id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth').run(uuidv4(), sub.endpoint, sub.keys.p256dh, sub.keys.auth); res.json({ ok: true }); } catch (err) { console.error(err); res.status(500).json({ error: 'Eroare la abonare push.' }); } });
+app.use(express.json()); app.post('/api/abonare', (req, res) => { const phone = req.body && req.body.phone; if (!isPlausiblePhone(phone)) { return res.status(400).json({ error: 'Un numar de telefon valid este obligatoriu.' }); } try { db.prepare('INSERT OR IGNORE INTO subscribers (id, phone) VALUES (?, ?)').run(uuidv4(), String(phone).trim()); res.json({ ok: true }); } catch (err) { console.error(err); res.status(500).json({ error: 'Eroare la abonare.' }); } }); app.get('/api/push/public-key', (req, res) => { res.json({ publicKey: pushConfigured ? PUSH_VAPID_PUBLIC_KEY : null }); }); app.get('/api/payment-methods', (req, res) => { res.json({ payu: !!payu && !HIDE_PAYU, stripe: !!stripeClient }); }); app.post('/api/push/subscribe', (req, res) => { const sub = req.body; if (!sub || !sub.endpoint || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) { return res.status(400).json({ error: 'Abonament push invalid.' }); } try { db.prepare('INSERT INTO push_subscriptions (id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth').run(uuidv4(), sub.endpoint, sub.keys.p256dh, sub.keys.auth); res.json({ ok: true }); } catch (err) { console.error(err); res.status(500).json({ error: 'Eroare la abonare push.' }); } });
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads/images', express.static(IMAGES_DIR));
@@ -479,7 +515,7 @@ app.post('/api/checkout', async (req, res) => {
     const quantity = Math.max(1, Math.min(MAX_QUANTITY_PER_ORDER, parseInt(req.body.quantity, 10) || 1));
 
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Numele este obligatoriu.' });
-    if (!phone || !String(phone).trim() || String(phone).replace(/\D/g, '').length < 9) {
+    if (!isPlausiblePhone(phone)) {
       return res.status(400).json({ error: 'Un numar de telefon valid este obligatoriu.' });
     }
     // Email-ul e optional - daca lipseste, clientul primeste produsul doar pe
@@ -626,7 +662,7 @@ app.get('/api/order/:id', async (req, res) => {
   });
 });
 
-app.post('/api/answer', (req, res) => {
+app.post('/api/answer', async (req, res) => {
   const { orderId, selectedIndex } = req.body;
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
   if (!order) return res.status(404).json({ error: 'Comanda nu a fost gasita.' });
@@ -639,6 +675,10 @@ app.post('/api/answer', (req, res) => {
   if (correct) {
     const token = crypto.randomBytes(24).toString('hex');
     db.prepare(`UPDATE orders SET unlocked = 1, status = 'unlocked', download_token = ? WHERE id = ?`).run(token, orderId);
+    // Nu blocam raspunsul catre client daca trimiterea pe WhatsApp intarzie
+    // sau da eroare (ex: sablonul inca in analiza la Meta) - descarcarea prin
+    // link ramane oricum disponibila mai jos.
+    sendTicketWhatsapp(order, token).catch(() => {});
     return res.json({
       correct: true,
       downloadUrl: `${BASE_URL}/descarca/${token}`,
@@ -679,6 +719,28 @@ app.get('/descarca/:token', (req, res) => {
   const seller = getSeller(product.seller_id);
   db.prepare('UPDATE orders SET downloads_used = downloads_used + 1 WHERE id = ?').run(order.id);
 
+  res.set('Content-Type', 'application/pdf');
+  res.set('Content-Disposition', `attachment; filename="bilete-${product.id.slice(0, 8)}.pdf"`);
+  streamTicketsPdf(
+    { productName: product.name, sellerName: seller ? seller.name : '', buyerName: order.buyer_name, numbers },
+    res
+  );
+});
+
+// Ruta interna folosita doar de Meta ca sa descarce PDF-ul biletelor atunci
+// cand livreaza sablonul bilet_digital_livrare (antet de tip document) pe
+// WhatsApp - la fel de protejata ca /descarca/:token (acelasi token lung,
+// generat random, valabil doar dupa deblocare), dar nu consuma din
+// downloads_used, ca sa nu afecteze limita de descarcari a clientului.
+app.get('/interno/bilet-whatsapp/:token', (req, res) => {
+  const order = db.prepare('SELECT * FROM orders WHERE download_token = ?').get(req.params.token);
+  if (!order || !order.unlocked) return res.status(404).send('Link invalid sau expirat.');
+  const product = getProduct(order.product_id);
+  if (!product) return res.status(404).send('Produsul nu mai exista.');
+  const numbers = orderTicketNumbers(order.id);
+  if (!numbers.length) return res.status(500).send('Nu exista numere alocate pentru aceasta comanda.');
+
+  const seller = getSeller(product.seller_id);
   res.set('Content-Type', 'application/pdf');
   res.set('Content-Disposition', `attachment; filename="bilete-${product.id.slice(0, 8)}.pdf"`);
   streamTicketsPdf(

@@ -4,14 +4,17 @@
 // de la un site serios, nu doar un simplu "Am inteles".
 //
 // Important: MaritaShow foloseste in prezent DOAR un cookie tehnic, strict
-// necesar (autentificare vanzator/admin) - nu avem cookie-uri de marketing
-// sau analiza. De aceea cele doua butoane duc practic la acelasi rezultat
-// din punct de vedere tehnic (nu exista nimic "de marketing" de dezactivat),
-// dar alegerea si panoul de detalii sunt afisate onest, exact ca in
-// politica de confidentialitate - fara sa pretindem o personalizare pe care
-// nu o oferim de fapt. Daca in viitor se adauga cookie-uri de analiza/
-// marketing, alegerea salvata aici (STORAGE_KEY) e locul unde se poate
-// verifica inainte de a le incarca.
+// necesar pentru functionarea si securitatea site-ului - nu avem cookie-uri
+// de marketing sau analiza. Textul afisat clientului e formulat general
+// (fara detalii interne, ca de exemplu cine anume se autentifica), pentru ca
+// e vorba de un cookie care nu il afecteaza personal pe vizitator; detaliul
+// tehnic complet (autentificarea vanzatorilor/administratorilor) ramane
+// documentat corect in politica de confidentialitate, la sectiunea
+// Cookie-uri. De aceea cele doua butoane duc practic la acelasi rezultat din
+// punct de vedere tehnic (nu exista nimic "de marketing" de dezactivat), dar
+// alegerea si panoul de detalii sunt afisate onest. Daca in viitor se adauga
+// cookie-uri de analiza/marketing, alegerea salvata aici (STORAGE_KEY) e
+// locul unde se poate verifica inainte de a le incarca.
 (function () {
   var STORAGE_KEY = 'cookie_consent_v2';
 
@@ -51,9 +54,9 @@
     el.innerHTML =
       '<div style="max-width:880px;margin:0 auto;display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:center;">' +
         '<span style="max-width:520px;">' +
-          'Folosim cookie-uri pentru a-ti oferi o experienta buna pe site. Cele tehnice, strict necesare ' +
-          '(ex: autentificarea contului de vanzator/admin), sunt mereu active. Nu folosim cookie-uri de ' +
-          'marketing sau analiza. ' +
+          'Folosim cookie-uri pentru a-ti oferi o experienta buna si sigura pe site. Cele tehnice, ' +
+          'strict necesare pentru functionarea corecta a platformei, sunt mereu active. Nu folosim ' +
+          'cookie-uri de marketing sau de analiza. ' +
           '<a href="#" id="cookie-notice-details" style="color:var(--accent,#6c8cff);">Detalii pe categorii</a> &middot; ' +
           '<a href="/politica-confidentialitate.html#cookie-uri" style="color:var(--accent,#6c8cff);">Politica de confidentialitate</a>' +
         '</span>' +
@@ -66,7 +69,8 @@
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:640px;margin:0 auto;">' +
           '<div>' +
             '<strong style="color:var(--text,#e8eaed);">Necesare</strong> - mereu active<br/>' +
-            '<span>Autentificare vanzator/admin si functionare de baza a site-ului. Nu pot fi dezactivate.</span>' +
+            '<span>Esentiale pentru functionarea de baza si securitatea site-ului. Nu pot fi dezactivate. ' +
+            'Detalii complete in <a href="/politica-confidentialitate.html#cookie-uri" style="color:var(--accent,#6c8cff);">politica de confidentialitate</a>.</span>' +
           '</div>' +
           '<input type="checkbox" checked disabled style="width:20px;height:20px;flex-shrink:0;accent-color:var(--accent,#6c8cff);" />' +
         '</div>' +

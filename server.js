@@ -1282,6 +1282,12 @@ app.get('/api/admin/stats', requireAdmin, (req, res) => {
        WHERE status IN ('paid','locked','unlocked') AND date(created_at) = date('now')`
     )
     .get();
+  // Cifre suplimentare pentru dashboard-ul unificat: cati oameni s-au
+  // abonat la notificari WhatsApp de produs nou, si cate comenzi au epuizat
+  // incercarile la intrebare (potentiale cereri de rambursare/noua sansa).
+  const subscribers = db.prepare('SELECT COUNT(*) as c FROM subscribers').get().c;
+  const lockedOrders = db.prepare(`SELECT COUNT(*) as c FROM orders WHERE status = 'locked'`).get().c;
+  const pendingOrders = db.prepare(`SELECT COUNT(*) as c FROM orders WHERE status = 'pending'`).get().c;
   res.json({
     sellers,
     totalProducts: products.total || 0,
@@ -1290,6 +1296,9 @@ app.get('/api/admin/stats', requireAdmin, (req, res) => {
     revenueBani: orders.revenue || 0,
     ordersToday: today.total || 0,
     revenueTodayBani: today.revenue || 0,
+    subscribers,
+    lockedOrders,
+    pendingOrders,
   });
 });
 

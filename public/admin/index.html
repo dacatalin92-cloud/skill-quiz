@@ -90,6 +90,21 @@
   .reply-bar textarea { flex: 1; resize: none; max-height: 90px; padding: 9px 12px; border-radius: 18px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.88rem; font-family: inherit; }
   .send-btn { width: auto; padding: 0 16px; border-radius: 18px; }
   .feedback-line { font-size: 0.76rem; margin-top: 6px; min-height: 1em; padding: 0 12px; }
+
+  /* Editare produs - modal */
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); align-items:center; justify-content:center; padding:20px; z-index:100; }
+  .modal-overlay.open { display:flex; }
+  .modal-card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:22px 24px; max-width:440px; width:100%; max-height:90vh; overflow-y:auto; }
+  .modal-card h3 { margin:0 0 16px; }
+  .modal-card label { display:block; margin:14px 0 6px; font-size:0.88rem; color:var(--muted); }
+  .modal-card input[type=text], .modal-card input[type=number], .modal-card textarea, .modal-card input[type=file] {
+    width:100%; padding:9px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:0.88rem; font-family:inherit;
+  }
+  .modal-card textarea { resize:vertical; min-height:60px; }
+  .modal-current-image { margin-top:8px; max-width:140px; max-height:100px; border-radius:8px; border:1px solid var(--border); display:block; }
+  .modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
+  .modal-actions button { width:auto; padding:9px 16px; }
+  .modal-actions .danger-btn { background:#3a1f1f; color:#ffb3b3; }
 </style>
 </head>
 <body>
@@ -173,6 +188,36 @@
   </section>
 </main>
 
+<div id="product-edit-overlay" class="modal-overlay">
+  <div class="modal-card">
+    <h3>Editeaza produsul</h3>
+    <div id="product-edit-feedback"></div>
+    <form id="product-edit-form">
+      <input type="hidden" name="productId" />
+
+      <label>Nume produs</label>
+      <input type="text" name="name" required />
+
+      <label>Descriere</label>
+      <textarea name="description"></textarea>
+
+      <label>Pret per bucata (RON)</label>
+      <input type="number" name="priceRon" min="0.01" step="0.01" required />
+
+      <label>Imagine produs</label>
+      <img id="product-edit-current-image" class="modal-current-image" style="display:none;" />
+      <input type="file" name="image" accept="image/*" />
+      <div style="color:var(--muted);font-size:0.78rem;margin-top:4px;">Lasa necompletat ca sa pastrezi imaginea actuala. Editarea functioneaza si pentru produsele active.</div>
+
+      <div class="modal-actions">
+        <button type="button" id="product-delete-btn" class="danger-btn">Sterge produsul</button>
+        <button type="button" id="product-edit-cancel-btn" style="background:transparent;border:1px solid var(--border);">Anuleaza</button>
+        <button type="submit">Salveaza</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script src="/common.js"></script>
 <script>
 /* ---------- Taburi ---------- */
@@ -228,10 +273,14 @@ async function loadStats() {
   `;
 }
 
+let lastProductsById = {};
+
 async function loadProducts() {
   const res = await fetch('/api/admin/produse');
   if (res.status === 401) { location.href = '/admin/login.html'; return; }
   const products = await res.json();
+  lastProductsById = {};
+  products.forEach(p => { lastProductsById[p.id] = p; });
   const el = document.getElementById('products');
   if (!products.length) {
     el.innerHTML = '<p style="color:#9aa0ab;">Nu exista inca niciun produs.</p>';
@@ -254,7 +303,8 @@ async function loadProducts() {
             <td><span class="badge ${p.active ? 'on' : 'off'}">${p.active ? 'Activ' : 'Dezactivat'}</span></td>
             <td style="white-space:nowrap;">
               <a class="export-btn" style="display:inline-block;text-decoration:none;color:#6c8cff;border:1px solid #2a2e38;border-radius:8px;padding:6px 12px;margin-right:6px;" href="#numere" data-numere-id="${p.id}">Numere</a>
-              ${p.orderCount > 0 ? `<a class="export-btn" style="display:inline-block;text-decoration:none;color:#6c8cff;border:1px solid #2a2e38;border-radius:8px;padding:6px 12px;" href="/api/admin/produse/${p.id}/export.csv">Exporta cumparatori</a>` : ''}
+              ${p.orderCount > 0 ? `<a class="export-btn" style="display:inline-block;text-decoration:none;color:#6c8cff;border:1px solid #2a2e38;border-radius:8px;padding:6px 12px;margin-right:6px;" href="/api/admin/produse/${p.id}/export.csv">Exporta cumparatori</a>` : ''}
+              <button class="export-btn" style="margin-right:6px;" data-edit-id="${p.id}">Editeaza</button>
             </td>
           </tr>
         `).join('')}
@@ -271,7 +321,88 @@ async function loadProducts() {
       activateTab('numere');
     });
   });
+  el.querySelectorAll('[data-edit-id]').forEach(btn => {
+    btn.addEventListener('click', () => openProductEditModal(lastProductsById[btn.dataset.editId]));
+  });
 }
+
+/* ---------- Editare / stergere produs (permisa si pentru produse active) ---------- */
+const productEditOverlay = document.getElementById('product-edit-overlay');
+const productEditForm = document.getElementById('product-edit-form');
+const productEditFeedback = document.getElementById('product-edit-feedback');
+const productEditCurrentImage = document.getElementById('product-edit-current-image');
+
+function openProductEditModal(product) {
+  if (!product) return;
+  productEditFeedback.innerHTML = '';
+  productEditForm.productId.value = product.id;
+  productEditForm.name.value = product.name;
+  productEditForm.description.value = product.description || '';
+  productEditForm.priceRon.value = (product.priceBani / 100).toFixed(2);
+  productEditForm.image.value = '';
+  if (product.image) {
+    productEditCurrentImage.src = product.image;
+    productEditCurrentImage.style.display = 'block';
+  } else {
+    productEditCurrentImage.style.display = 'none';
+  }
+  productEditOverlay.classList.add('open');
+}
+
+function closeProductEditModal() {
+  productEditOverlay.classList.remove('open');
+}
+
+document.getElementById('product-edit-cancel-btn').addEventListener('click', closeProductEditModal);
+productEditOverlay.addEventListener('click', (ev) => { if (ev.target === productEditOverlay) closeProductEditModal(); });
+
+productEditForm.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const id = productEditForm.productId.value;
+  const fd = new FormData(productEditForm);
+  const saveBtn = productEditForm.querySelector('button[type="submit"]');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Se salveaza...';
+  try {
+    const res = await fetch(`/api/admin/produse/${id}/edit`, { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.ok) {
+      closeProductEditModal();
+      loadProducts();
+    } else {
+      productEditFeedback.innerHTML = `<div class="notice error">${data.error || 'Eroare la salvare.'}</div>`;
+    }
+  } catch (err) {
+    productEditFeedback.innerHTML = '<div class="notice error">Eroare de retea. Incearca din nou.</div>';
+  }
+  saveBtn.disabled = false;
+  saveBtn.textContent = 'Salveaza';
+});
+
+document.getElementById('product-delete-btn').addEventListener('click', async () => {
+  const id = productEditForm.productId.value;
+  const product = lastProductsById[id];
+  if (!product) return;
+  const msg = product.orderCount > 0
+    ? `"${product.name}" are deja ${product.orderCount} comenzi. Nu poate fi sters efectiv (ar pierde legatura cu comenzile/facturile existente) - va fi arhivat: dezactivat si scos din toate listele, dar istoricul ramane. Continui?`
+    : `Stergi definitiv "${product.name}"? Nu are nicio comanda, asa ca stergerea e completa si ireversibila.`;
+  if (!confirm(msg)) return;
+  const delBtn = document.getElementById('product-delete-btn');
+  delBtn.disabled = true;
+  try {
+    const res = await fetch(`/api/admin/produse/${id}/delete`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      closeProductEditModal();
+      loadProducts();
+    } else {
+      productEditFeedback.innerHTML = `<div class="notice error">${data.error || 'Eroare la stergere.'}</div>`;
+    }
+  } catch (err) {
+    productEditFeedback.innerHTML = '<div class="notice error">Eroare de retea. Incearca din nou.</div>';
+  }
+  delBtn.disabled = false;
+});
 
 /* ---------- Comenzi ---------- */
 const orderStatusLabels = { paid: 'In asteptare raspuns', unlocked: 'Deblocat', locked: 'Incercari epuizate', pending: 'Neplatita' };

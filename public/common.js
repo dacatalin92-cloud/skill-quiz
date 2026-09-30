@@ -24,7 +24,8 @@ function renderSiteFooter() {
       <p style="margin:0 0 6px;">
         <a href="/termeni-si-conditii.html" style="color:#6c8cff;">Termeni si conditii</a> ·
         <a href="/politica-confidentialitate.html" style="color:#6c8cff;">Politica de confidentialitate</a> ·
-        <a href="/politica-retur.html" style="color:#6c8cff;">Politica de retur</a>
+        <a href="/politica-retur.html" style="color:#6c8cff;">Politica de retur</a> ·
+        <a href="/contact.html" style="color:#6c8cff;">Contact</a>
       </p>
       <p style="margin:0 0 4px;">
         TIMI &amp; MARITA SHOW S.R.L. · CUI 51858921 · Nr. inreg. Registrul Comertului J2025037585001<br />

@@ -22,6 +22,11 @@
   .participants-link { display:block; text-align:center; margin-top:10px; font-size:0.82rem; color:#6c8cff; }
   .payment-method-choice { display:flex; gap:14px; margin-bottom:10px; font-size:0.85rem; color:#c7cad1; }
   .payment-method-choice label { display:flex; align-items:center; gap:5px; cursor:pointer; }
+  .terms-check { display:flex; align-items:flex-start; gap:6px; margin:6px 0; font-size:0.78rem; color:#9aa0ab; line-height:1.4; cursor:pointer; }
+  .terms-check input { margin-top:2px; flex-shrink:0; width:auto; }
+  .terms-check a { color:#6c8cff; }
+  .secure-payment-badge { display:flex; align-items:center; gap:6px; margin:6px 0 10px; font-size:0.78rem; color:#9aa0ab; }
+  .stripe-brand { color:#635bff; }
 </style>
 </head>
 <body>
@@ -91,7 +96,7 @@ async function loadProducts() {
           <input type="text" name="buyerName" placeholder="Numele tau" required />
           <input type="tel" name="buyerPhone" placeholder="Numar de telefon" required />
           <input type="email" name="buyerEmail" placeholder="Email (optional, pentru confirmare)" />
-          <input type="text" name="buyerAddress" placeholder="Adresa (optional, necesara doar pentru factura)" />
+          <input type="text" name="buyerAddress" placeholder="Adresa (necesara pentru factura)" required />
           <input type="number" name="quantity" min="1" max="${p.stockRemaining}" value="1" required />
           ${paymentMethods.payu && paymentMethods.stripe ? `
           <div class="payment-method-choice">
@@ -99,6 +104,16 @@ async function loadProducts() {
             <label><input type="radio" name="paymentMethod" value="stripe" /> Card (Stripe)</label>
           </div>
           ` : `<input type="hidden" name="paymentMethod" value="${paymentMethods.stripe ? 'stripe' : 'payu'}" />`}
+          <label class="terms-check">
+            <input type="checkbox" name="termsAccepted" required />
+            <span>Am citit si sunt de acord cu <a href="/termeni-si-conditii.html" target="_blank" rel="noopener">Termenii si conditiile</a> si <a href="/politica-confidentialitate.html" target="_blank" rel="noopener">Politica de confidentialitate</a>.</span>
+          </label>
+          ${paymentMethods.stripe ? `
+          <div class="secure-payment-badge">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            <span>Plata securizata prin <strong class="stripe-brand">stripe</strong></span>
+          </div>
+          ` : ''}
           <button type="submit">Cumpara</button>
         </form>
       `}
@@ -127,6 +142,7 @@ async function startCheckout(event, productId) {
         address: form.buyerAddress.value,
         quantity: parseInt(form.quantity.value, 10),
         paymentMethod: form.paymentMethod ? form.paymentMethod.value : 'payu',
+        termsAccepted: form.termsAccepted.checked,
       }),
     });
     const data = await res.json();

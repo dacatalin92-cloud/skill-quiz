@@ -86,6 +86,17 @@ if (!sellerColumns.includes('reset_token_expires')) {
   db.exec('ALTER TABLE sellers ADD COLUMN reset_token_expires TEXT');
 }
 
+// Migratie usoara: adauga coloana deleted_at pe produse. Un produs cu
+// comenzi deja existente NU se poate sterge efectiv din baza de date (ar
+// ramane comenzi/bilete orfane, fara produsul din spatele lor) - in schimb
+// se marcheaza "sters" (deleted_at completat + dezactivat), asa incat sa
+// dispara din vitrina si din toate listele, dar istoricul comenzilor sa
+// ramana intact. Doar produsele fara nicio comanda se sterg efectiv.
+const productColumns = db.prepare('PRAGMA table_info(products)').all().map((c) => c.name);
+if (!productColumns.includes('deleted_at')) {
+  db.exec('ALTER TABLE products ADD COLUMN deleted_at TEXT');
+}
+
 // Migratie usoara: adauga coloanele pentru factura emisa automat (Oblio),
 // pentru bazele de date create inainte de a exista facturarea automata.
 if (!orderColumns.includes('invoice_series')) {

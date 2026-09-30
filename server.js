@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
 const bcrypt = require('bcryptjs');
@@ -299,6 +300,54 @@ function getProduct(id) {
 function ticketsAssignedCount(productId) {
   return db.prepare('SELECT COUNT(*) as c FROM tickets WHERE product_id = ?').get(productId).c;
 }
+function productOrderCount(productId) {
+  return db.prepare("SELECT COUNT(*) as c FROM orders WHERE product_id = ? AND status IN ('paid','locked','unlocked')").get(productId).c;
+}
+function deleteProductImageFile(imagePath) {
+  if (!imagePath) return;
+  try {
+    fs.unlinkSync(path.join(IMAGES_DIR, path.basename(imagePath)));
+  } catch (err) {
+    if (err.code !== 'ENOENT') console.error('Nu am putut sterge fisierul imaginii vechi:', err.message);
+  }
+}
+// Editeaza campurile unui produs (nume, descriere, pret si, optional, o
+// imagine noua) - permis indiferent daca produsul este activ sau nu.
+// Stocul NU se editeaza aici: ar putea intra in conflict cu numerele de
+// bilete deja alocate clientilor care au cumparat deja din acest produs.
+function applyProductEdit(product, body, file) {
+  const { name, description, priceRon } = body;
+  if (!name || !String(name).trim()) return { error: 'Numele produsului este obligatoriu.' };
+  if (!priceRon || isNaN(parseFloat(priceRon)) || parseFloat(priceRon) <= 0) {
+    return { error: 'Un pret valid este obligatoriu.' };
+  }
+  const oldImagePath = product.image_path;
+  db.prepare('UPDATE products SET name = ?, description = ?, price_bani = ?, image_path = ? WHERE id = ?').run(
+    String(name).trim(),
+    description || '',
+    Math.round(parseFloat(priceRon) * 100),
+    file ? file.filename : oldImagePath,
+    product.id
+  );
+  if (file && oldImagePath) deleteProductImageFile(oldImagePath);
+  return { ok: true };
+}
+// Sterge un produs. Daca nu are nicio comanda platita/deblocata/blocata,
+// se sterge efectiv din baza de date (si imaginea de pe disc). Daca are
+// deja comenzi, se marcheaza "sters" (deleted_at + dezactivat) - ramane
+// invizibil oriunde in site, dar istoricul comenzilor/facturilor/biletelor
+// pentru acele comenzi ramane intact si consultabil in admin.
+function deleteOrArchiveProduct(product) {
+  const orders = productOrderCount(product.id);
+  if (orders === 0) {
+    db.prepare('DELETE FROM tickets WHERE product_id = ?').run(product.id);
+    db.prepare('DELETE FROM products WHERE id = ?').run(product.id);
+    deleteProductImageFile(product.image_path);
+    return { ok: true, mode: 'deleted' };
+  }
+  db.prepare("UPDATE products SET active = 0, deleted_at = datetime('now') WHERE id = ?").run(product.id);
+  return { ok: true, mode: 'archived' };
+}
 function publicSeller(seller) {
   return { id: seller.id, name: seller.name, payuVerified: !!seller.payu_verified };
 }
@@ -433,7 +482,7 @@ app.get('/api/products', (req, res) => {
     .prepare(
       `SELECT p.*, s.name as seller_name, s.payu_verified
        FROM products p JOIN sellers s ON s.id = p.seller_id
-       WHERE p.active = 1
+       WHERE p.active = 1 AND p.deleted_at IS NULL
        ORDER BY p.created_at DESC`
     )
     .all();
@@ -953,8 +1002,8 @@ app.get('/api/vanzator/payu/retur', async (req, res) => {
 });
 
 app.get('/api/vanzator/produse', requireSeller, (req, res) => {
-  const rows = db.prepare('SELECT * FROM products WHERE seller_id = ? ORDER BY created_at DESC').all(req.seller.id);
-  res.json(rows.map((p) => ({ ...publicProduct(p), active: !!p.active })));
+  const rows = db.prepare('SELECT * FROM products WHERE seller_id = ? AND deleted_at IS NULL ORDER BY created_at DESC').all(req.seller.id);
+  res.json(rows.map((p) => ({ ...publicProduct(p), active: !!p.active, orderCount: productOrderCount(p.id) })));
 });
 
 app.post(
@@ -1006,6 +1055,34 @@ app.post('/api/vanzator/produse/:id/toggle', requireSeller, (req, res) => {
   if (!product || product.seller_id !== req.seller.id) return res.status(404).json({ error: 'Produs inexistent.' });
   db.prepare('UPDATE products SET active = ? WHERE id = ?').run(product.active ? 0 : 1, product.id);
   res.json({ ok: true, active: !product.active });
+});
+
+// Editare produs (nume, descriere, pret, imagine) - permisa indiferent
+// daca produsul e activ sau dezactivat.
+app.post(
+  '/api/vanzator/produse/:id/edit',
+  requireSeller,
+  (req, res, next) => {
+    upload.single('image')(req, res, (err) => {
+      if (err) return res.status(400).json({ error: err.message });
+      next();
+    });
+  },
+  (req, res) => {
+    const product = getProduct(req.params.id);
+    if (!product || product.seller_id !== req.seller.id) return res.status(404).json({ error: 'Produs inexistent.' });
+    const result = applyProductEdit(product, req.body, req.file);
+    if (result.error) return res.status(400).json(result);
+    res.json(result);
+  }
+);
+
+// Stergere produs - permisa indiferent daca produsul e activ. Daca are
+// deja comenzi, e arhivat (nu se sterge istoricul), altfel e sters efectiv.
+app.post('/api/vanzator/produse/:id/delete', requireSeller, (req, res) => {
+  const product = getProduct(req.params.id);
+  if (!product || product.seller_id !== req.seller.id) return res.status(404).json({ error: 'Produs inexistent.' });
+  res.json(deleteOrArchiveProduct(product));
 });
 
 // Evidenta achizitiilor - vanzatorul vede doar comenzile pentru produsele lui.
@@ -1264,7 +1341,7 @@ app.post('/api/admin/vanzatori/:id/produse-active', requireAdmin, (req, res) => 
   const seller = getSeller(req.params.id);
   if (!seller) return res.status(404).json({ error: 'Vanzator inexistent.' });
   const active = req.body && req.body.active ? 1 : 0;
-  const result = db.prepare('UPDATE products SET active = ? WHERE seller_id = ?').run(active, seller.id);
+  const result = db.prepare('UPDATE products SET active = ? WHERE seller_id = ? AND deleted_at IS NULL').run(active, seller.id);
   res.json({ ok: true, updated: result.changes });
 });
 
@@ -1272,7 +1349,7 @@ app.post('/api/admin/vanzatori/:id/produse-active', requireAdmin, (req, res) => 
 // rapida asupra a ce se intampla pe site (vanzatori, produse, comenzi, incasari).
 app.get('/api/admin/stats', requireAdmin, (req, res) => {
   const sellers = db.prepare('SELECT COUNT(*) as c FROM sellers').get().c;
-  const products = db.prepare('SELECT COUNT(*) as total, SUM(CASE WHEN active = 1 THEN 1 ELSE 0 END) as active FROM products').get();
+  const products = db.prepare('SELECT COUNT(*) as total, SUM(CASE WHEN active = 1 THEN 1 ELSE 0 END) as active FROM products WHERE deleted_at IS NULL').get();
   const orders = db
     .prepare(`SELECT COUNT(*) as total, COALESCE(SUM(amount_bani), 0) as revenue FROM orders WHERE status IN ('paid','locked','unlocked')`)
     .get();
@@ -1308,13 +1385,14 @@ app.get('/api/admin/stats', requireAdmin, (req, res) => {
 app.get('/api/admin/produse', requireAdmin, (req, res) => {
   const rows = db
     .prepare(
-      `SELECT p.id, p.name, p.price_bani, p.stock_total, p.active, p.created_at,
+      `SELECT p.id, p.name, p.description, p.price_bani, p.stock_total, p.active, p.created_at, p.image_path,
               s.name as seller_name,
               (SELECT COUNT(*) FROM tickets t WHERE t.product_id = p.id) as sold,
               (SELECT COUNT(*) FROM orders o WHERE o.product_id = p.id AND o.status IN ('paid','locked','unlocked')) as order_count,
               (SELECT COALESCE(SUM(o.amount_bani), 0) FROM orders o WHERE o.product_id = p.id AND o.status IN ('paid','locked','unlocked')) as revenue_bani
        FROM products p
        JOIN sellers s ON s.id = p.seller_id
+       WHERE p.deleted_at IS NULL
        ORDER BY p.created_at DESC`
     )
     .all();
@@ -1322,6 +1400,7 @@ app.get('/api/admin/produse', requireAdmin, (req, res) => {
     rows.map((r) => ({
       id: r.id,
       name: r.name,
+      description: r.description,
       priceBani: r.price_bani,
       stockTotal: r.stock_total,
       active: !!r.active,
@@ -1330,8 +1409,38 @@ app.get('/api/admin/produse', requireAdmin, (req, res) => {
       orderCount: r.order_count,
       revenueBani: r.revenue_bani,
       createdAt: r.created_at,
+      image: r.image_path ? `/uploads/images/${path.basename(r.image_path)}` : null,
     }))
   );
+});
+
+// Editare produs de catre admin (nume, descriere, pret, imagine) - pentru
+// orice produs, al oricarui vanzator, indiferent daca e activ sau nu.
+app.post(
+  '/api/admin/produse/:id/edit',
+  requireAdmin,
+  (req, res, next) => {
+    upload.single('image')(req, res, (err) => {
+      if (err) return res.status(400).json({ error: err.message });
+      next();
+    });
+  },
+  (req, res) => {
+    const product = getProduct(req.params.id);
+    if (!product) return res.status(404).json({ error: 'Produs inexistent.' });
+    const result = applyProductEdit(product, req.body, req.file);
+    if (result.error) return res.status(400).json(result);
+    res.json(result);
+  }
+);
+
+// Stergere produs de catre admin - pentru orice produs, al oricarui
+// vanzator, indiferent daca e activ. Daca are deja comenzi, e arhivat
+// (nu se sterge istoricul), altfel e sters efectiv.
+app.post('/api/admin/produse/:id/delete', requireAdmin, (req, res) => {
+  const product = getProduct(req.params.id);
+  if (!product) return res.status(404).json({ error: 'Produs inexistent.' });
+  res.json(deleteOrArchiveProduct(product));
 });
 
 // Extrage (CSV) toti cumparatorii confirmati ai unui produs - nume, telefon,

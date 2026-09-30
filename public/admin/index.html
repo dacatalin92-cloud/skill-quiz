@@ -6,15 +6,16 @@
 <title>Dashboard admin</title>
 <link rel="stylesheet" href="/style.css" />
 <style>
-  .top-bar { max-width:1100px; margin: 0 auto; padding: 16px 24px 0; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  .top-bar { max-width:1200px; margin: 0 auto; padding: 16px 24px 0; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
   .top-bar button { width:auto; padding:6px 14px; font-size:0.85rem; }
   .top-bar .nav-links { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
   .top-bar .nav-links a { color:#6c8cff; font-size:0.9rem; }
-  main { max-width: 1100px; }
+  main { max-width: 1200px; }
   .stats-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:12px; margin-bottom:24px; }
   .stat-card { background:#171a21; border:1px solid #2a2e38; border-radius:12px; padding:16px 18px; }
   .stat-card .label { color:#9aa0ab; font-size:0.8rem; }
   .stat-card .value { font-size:1.6rem; font-weight:700; margin-top:4px; }
+  .stat-card.warn .value { color:#ffcf7d; }
   .row { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
   table { width:100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem; }
   th, td { text-align:left; padding: 9px 10px; border-bottom: 1px solid #2a2e38; }
@@ -22,37 +23,190 @@
   .badge { display:inline-block; padding:2px 9px; border-radius:20px; font-size:0.72rem; font-weight:600; }
   .badge.on { background:#16301f; color:#a4f0bb; }
   .badge.off { background:#331c1c; color:#ffb3b3; }
+  .badge.unlocked { background:#16301f; color:#a4f0bb; }
+  .badge.paid { background:#1c2333; color:#b7c3ff; }
+  .badge.locked { background:#331c1c; color:#ffb3b3; }
+  .badge.pending { background:#332c1c; color:#ffdca0; }
   .export-btn { width:auto; padding:6px 12px; font-size:0.8rem; }
+
+  /* Taburi */
+  .tabs { display:flex; gap:4px; margin-bottom:22px; flex-wrap:wrap; border-bottom:1px solid var(--border); }
+  .tab-btn { width:auto; padding:11px 16px; background:transparent; border:none; border-bottom:2px solid transparent; color:var(--muted); font-size:0.92rem; cursor:pointer; border-radius:0; position:relative; }
+  .tab-btn.active { color:var(--text); border-bottom-color:var(--accent); font-weight:600; }
+  .tab-btn .dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#ff8080; margin-left:6px; vertical-align:middle; }
+  .tab-panel { display:none; }
+  .tab-panel.active { display:block; }
+
+  /* Vanzatori */
+  .seller-item { background:#171a21; border:1px solid #2a2e38; border-radius:12px; padding:16px 18px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  .seller-item .info { color:#9aa0ab; font-size:0.85rem; margin-top:4px; }
+
+  /* Numere */
+  select#numere-product-select { width:auto; padding:8px 12px; }
+  .legend { display:flex; align-items:center; gap:18px; margin:14px 0 18px; font-size:0.85rem; color:#9aa0ab; }
+  .legend .swatch { display:inline-block; width:14px; height:14px; border-radius:4px; margin-right:6px; vertical-align:middle; }
+  .swatch.green { background:#1c5c34; }
+  .swatch.red { background:#5c1c1c; }
+  .stat-line { color:#9aa0ab; font-size:0.9rem; margin-bottom:4px; }
+  table.numere { width:100%; border-collapse: separate; border-spacing: 4px; margin-top: 6px; table-layout: fixed; }
+  table.numere td { text-align:center; padding: 8px 4px; border-radius: 8px; font-size: 0.8rem; font-weight:600; cursor:default; }
+  td.numar-achizitionat { background:#1c5c34; color:#c6f5d6; }
+  td.numar-liber { background:#3a1f1f; color:#ffb3b3; }
+
+  /* WhatsApp - chat incorporat, cu inaltime fixa (nu tot ecranul, ca in
+     PWA-ul dedicat de la /admin/whatsapp.html) */
+  .wa-embed { height: 66vh; min-height:420px; display:flex; border:1px solid var(--border); border-radius:12px; overflow:hidden; background:var(--card); }
+  .wa-list-col { width:280px; flex-shrink:0; border-right:1px solid var(--border); display:flex; flex-direction:column; }
+  .wa-thread-col { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .wa-utility { padding:10px 12px; border-bottom:1px solid var(--border); display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .ghost-btn { width: auto; padding: 6px 12px; font-size: 0.78rem; background: transparent; border: 1px solid var(--border); color: var(--text); border-radius: 8px; cursor: pointer; }
+  .conv-list { flex: 1; overflow-y: auto; }
+  .conv-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .conv-row:hover { background: rgba(255,255,255,0.04); }
+  .conv-row.selected { background: rgba(108,140,255,0.12); }
+  .conv-avatar { flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: var(--bg); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-weight: 600; color: var(--accent); font-size: 0.78rem; }
+  .conv-main { flex: 1; min-width: 0; }
+  .conv-top-line { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+  .conv-phone { font-weight: 600; font-size: 0.88rem; color: var(--text); }
+  .conv-time { font-size: 0.68rem; color: var(--muted); flex-shrink: 0; }
+  .conv-preview { color: var(--muted); font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .conv-row.unread .conv-preview { color: var(--text); }
+  .conv-unread-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .empty-state { padding: 30px 16px; text-align: center; color: var(--muted); font-size:0.85rem; }
+  .thread-header { padding: 10px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .thread-phone-label { font-weight: 600; font-size: 0.95rem; }
+  .thread-hint { font-size: 0.68rem; color: var(--muted); display:block; margin-top:2px; }
+  .thread-messages { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .bubble { max-width: 78%; padding: 8px 12px; border-radius: 14px; font-size: 0.88rem; }
+  .bubble .text { white-space: pre-wrap; word-break: break-word; }
+  .bubble .time { display: block; font-size: 0.66rem; color: #9aa0ab; margin-top: 3px; }
+  .bubble.in { align-self: flex-start; background: #1c2333; color: #c7cad1; border-bottom-left-radius: 4px; }
+  .bubble.out { align-self: flex-end; background: #1e3d2b; color: #d7ffe6; border-bottom-right-radius: 4px; }
+  .reply-bar { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); flex-shrink: 0; }
+  .reply-bar textarea { flex: 1; resize: none; max-height: 90px; padding: 9px 12px; border-radius: 18px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 0.88rem; font-family: inherit; }
+  .send-btn { width: auto; padding: 0 16px; border-radius: 18px; }
+  .feedback-line { font-size: 0.76rem; margin-top: 6px; min-height: 1em; padding: 0 12px; }
 </style>
 </head>
 <body>
 <div class="top-bar">
   <strong>Panou administrator</strong>
   <div class="nav-links">
-    <a href="/admin/comenzi.html">Toate comenzile</a>
-    <a href="/admin/vanzatori.html">Vanzatori</a>
-    <a href="/admin/whatsapp.html">Mesaje WhatsApp</a>
+    <a href="/" target="_blank" rel="noopener">Vezi site-ul &rarr;</a>
     <button id="logout-btn">Delogare</button>
   </div>
 </div>
 <header>
   <h1>Dashboard</h1>
-  <p>Tot ce se intampla pe site, dintr-o singura privire.</p>
+  <p>Tot ce se intampla pe site, dintr-o singura pagina.</p>
 </header>
 <main>
   <div id="stats" class="stats-grid">
     <div class="stat-card"><div class="label">Se incarca...</div></div>
   </div>
 
-  <div class="row" style="margin-bottom:16px;">
-    <h2 style="margin:0;">Produse (toti vanzatorii)</h2>
-    <a href="/vanzator/produs-nou.html"><button style="width:auto;padding:10px 16px;">+ Adauga produs</button></a>
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="general">Prezentare generala</button>
+    <button class="tab-btn" data-tab="comenzi">Comenzi</button>
+    <button class="tab-btn" data-tab="vanzatori">Vanzatori</button>
+    <button class="tab-btn" data-tab="whatsapp">WhatsApp<span id="wa-unread-dot" class="dot" style="display:none;"></span></button>
+    <button class="tab-btn" data-tab="numere">Numere</button>
   </div>
-  <div id="products" class="question-card">Se incarca...</div>
+
+  <section id="tab-general" class="tab-panel active">
+    <div class="row" style="margin-bottom:16px;">
+      <h2 style="margin:0;">Produse (toti vanzatorii)</h2>
+      <a href="/vanzator/produs-nou.html"><button style="width:auto;padding:10px 16px;">+ Adauga produs</button></a>
+    </div>
+    <div id="products" class="question-card">Se incarca...</div>
+  </section>
+
+  <section id="tab-comenzi" class="tab-panel">
+    <div id="comenzi-content" class="question-card">Se incarca...</div>
+  </section>
+
+  <section id="tab-vanzatori" class="tab-panel">
+    <p style="color:#9aa0ab;margin-top:0;">Poti dezactiva dintr-o data toate produsele unui vanzator, ca sa nu mai apara pe vitrina publica. Nimic nu se sterge - actiunea e reversibila.</p>
+    <div id="vanzatori-content" class="question-card">Se incarca...</div>
+  </section>
+
+  <section id="tab-whatsapp" class="tab-panel">
+    <div class="wa-utility">
+      <button id="wa-push-btn" type="button" class="ghost-btn">Activeaza notificari pe acest telefon</button>
+      <span id="wa-push-feedback" style="font-size:0.78rem;"></span>
+    </div>
+    <div class="wa-embed">
+      <div class="wa-list-col">
+        <div id="wa-conv-list" class="conv-list">Se incarca...</div>
+      </div>
+      <div class="wa-thread-col">
+        <div id="wa-thread-empty" class="empty-state" style="margin:auto;">Alege o conversatie din stanga.</div>
+        <div id="wa-thread-open" style="display:none;flex-direction:column;flex:1;min-height:0;">
+          <div class="thread-header">
+            <span id="wa-thread-phone" class="thread-phone-label">+</span>
+            <span class="thread-hint">Mesaj text liber doar in primele 24h de la ultimul mesaj primit</span>
+          </div>
+          <div id="wa-thread-messages" class="thread-messages"></div>
+          <form id="wa-reply-form" class="reply-bar">
+            <textarea id="wa-reply-text" placeholder="Scrie un raspuns..." rows="1" required></textarea>
+            <button type="submit" class="send-btn">Trimite</button>
+          </form>
+          <div id="wa-reply-feedback" class="feedback-line"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-numere" class="tab-panel">
+    <div class="row" style="margin-bottom:10px;">
+      <h2 id="numere-titlu" style="margin:0;">Numere produs</h2>
+      <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;color:#9aa0ab;">
+        Produs:
+        <select id="numere-product-select"><option>Se incarca...</option></select>
+      </label>
+    </div>
+    <div id="numere-content" class="question-card">Se incarca...</div>
+  </section>
 </main>
 
 <script src="/common.js"></script>
 <script>
+/* ---------- Taburi ---------- */
+const validTabs = ['general', 'comenzi', 'vanzatori', 'whatsapp', 'numere'];
+let activeTab = 'general';
+
+function tabFromLocation() {
+  const hash = location.hash.replace('#', '');
+  return validTabs.includes(hash) ? hash : 'general';
+}
+
+function activateTab(tab, opts) {
+  opts = opts || {};
+  activeTab = validTabs.includes(tab) ? tab : 'general';
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === activeTab);
+  });
+  document.querySelectorAll('.tab-panel').forEach(panel => {
+    panel.classList.toggle('active', panel.id === 'tab-' + activeTab);
+  });
+  if (!opts.skipHash) location.hash = activeTab;
+  runActiveTabLoader();
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => activateTab(btn.dataset.tab));
+});
+window.addEventListener('hashchange', () => activateTab(tabFromLocation(), { skipHash: true }));
+
+function runActiveTabLoader() {
+  if (activeTab === 'general') { loadStats(); loadProducts(); }
+  else if (activeTab === 'comenzi') loadComenzi();
+  else if (activeTab === 'vanzatori') loadVanzatori();
+  else if (activeTab === 'whatsapp') refreshWhatsapp();
+  else if (activeTab === 'numere') loadNumere();
+}
+
+/* ---------- Prezentare generala ---------- */
 async function loadStats() {
   const res = await fetch('/api/admin/stats');
   if (res.status === 401) { location.href = '/admin/login.html'; return; }
@@ -65,6 +219,8 @@ async function loadStats() {
     <div class="stat-card"><div class="label">Incasari totale</div><div class="value">${(s.revenueBani/100).toFixed(2)} RON</div></div>
     <div class="stat-card"><div class="label">Comenzi azi</div><div class="value">${s.ordersToday}</div></div>
     <div class="stat-card"><div class="label">Incasari azi</div><div class="value">${(s.revenueTodayBani/100).toFixed(2)} RON</div></div>
+    <div class="stat-card"><div class="label">Abonati WhatsApp</div><div class="value">${s.subscribers}</div></div>
+    <div class="stat-card ${s.lockedOrders > 0 ? 'warn' : ''}"><div class="label">Comenzi esuate</div><div class="value">${s.lockedOrders}</div></div>
   `;
 }
 
@@ -93,7 +249,7 @@ async function loadProducts() {
             <td>${(p.revenueBani/100).toFixed(2)} RON</td>
             <td><span class="badge ${p.active ? 'on' : 'off'}">${p.active ? 'Activ' : 'Dezactivat'}</span></td>
             <td style="white-space:nowrap;">
-              <a class="export-btn" style="display:inline-block;text-decoration:none;color:#6c8cff;border:1px solid #2a2e38;border-radius:8px;padding:6px 12px;margin-right:6px;" href="/admin/numere.html?id=${p.id}">Numere</a>
+              <a class="export-btn" style="display:inline-block;text-decoration:none;color:#6c8cff;border:1px solid #2a2e38;border-radius:8px;padding:6px 12px;margin-right:6px;" href="#numere" data-numere-id="${p.id}">Numere</a>
               ${p.orderCount > 0 ? `<a class="export-btn" style="display:inline-block;text-decoration:none;color:#6c8cff;border:1px solid #2a2e38;border-radius:8px;padding:6px 12px;" href="/api/admin/produse/${p.id}/export.csv">Exporta cumparatori</a>` : ''}
             </td>
           </tr>
@@ -101,17 +257,411 @@ async function loadProducts() {
       </tbody>
     </table></div>
   `;
+  el.querySelectorAll('[data-numere-id]').forEach(a => {
+    a.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      // Setam produsul ales INAINTE de a activa tab-ul, ca loadNumere() sa
+      // porneasca o singura data, direct cu produsul corect (fara sa faca
+      // doua cereri redundante catre server).
+      document.getElementById('numere-product-select').dataset.selectedId = a.dataset.numereId;
+      activateTab('numere');
+    });
+  });
 }
 
+/* ---------- Comenzi ---------- */
+const orderStatusLabels = { paid: 'In asteptare raspuns', unlocked: 'Deblocat', locked: 'Incercari epuizate', pending: 'Neplatita' };
+
+async function loadComenzi() {
+  const res = await fetch('/api/admin/comenzi');
+  if (res.status === 401) { location.href = '/admin/login.html'; return; }
+  const orders = await res.json();
+  const el = document.getElementById('comenzi-content');
+  if (!orders.length) {
+    el.innerHTML = '<p style="color:#9aa0ab;">Nu exista inca achizitii confirmate.</p>';
+    return;
+  }
+  el.innerHTML = `
+    <div style="overflow-x:auto;"><table>
+      <thead>
+        <tr><th>Data</th><th>Vanzator</th><th>Produs</th><th>Client</th><th>Telefon</th><th>Email</th><th>Adresa</th><th>Cant.</th><th>Numere</th><th>Suma</th><th>Comision</th><th>Status</th><th>Factura</th></tr>
+      </thead>
+      <tbody>
+        ${orders.map(o => `
+          <tr>
+            <td>${new Date(o.createdAt + 'Z').toLocaleString('ro-RO')}</td>
+            <td>${escapeHtml(o.sellerName)}<br><span style="color:#9aa0ab;font-size:0.78rem;">${escapeHtml(o.sellerEmail)}</span></td>
+            <td>${escapeHtml(o.productName)}</td>
+            <td>${escapeHtml(o.buyerName || '-')}</td>
+            <td>${escapeHtml(o.buyerPhone || '-')}</td>
+            <td>${escapeHtml(o.buyerEmail || '-')}</td>
+            <td>${escapeHtml(o.buyerAddress || '-')}</td>
+            <td>${o.quantity}</td>
+            <td>${o.tickets.map(n => '#' + n).join(', ') || '-'}</td>
+            <td>${(o.amountBani/100).toFixed(2)} RON</td>
+            <td>${(o.platformFeeBani/100).toFixed(2)} RON</td>
+            <td><span class="badge ${o.status}">${orderStatusLabels[o.status] || o.status}</span></td>
+            <td>${o.invoiceLink ? `<a href="${o.invoiceLink}" target="_blank" rel="noopener" style="color:#6c8cff;">Vezi</a>` : '-'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table></div>
+  `;
+}
+
+/* ---------- Vanzatori ---------- */
+async function loadVanzatori() {
+  const res = await fetch('/api/admin/vanzatori');
+  if (res.status === 401) { location.href = '/admin/login.html'; return; }
+  const sellers = await res.json();
+  const el = document.getElementById('vanzatori-content');
+  if (!sellers.length) {
+    el.innerHTML = '<p style="color:#9aa0ab;">Nu exista inca niciun vanzator inregistrat.</p>';
+    return;
+  }
+  el.innerHTML = sellers.map(s => {
+    const allActive = s.totalProducts > 0 && s.activeProducts === s.totalProducts;
+    const allInactive = s.activeProducts === 0;
+    return `
+    <div class="seller-item">
+      <div>
+        <strong>${escapeHtml(s.name)}</strong>
+        <span class="badge ${allInactive ? 'off' : 'on'}">${allInactive ? 'Toate dezactivate' : (allActive ? 'Toate active' : 'Partial active')}</span>
+        <div class="info">${escapeHtml(s.email)} &middot; ${s.activeProducts} active din ${s.totalProducts} produse</div>
+      </div>
+      <div>
+        <button data-id="${s.id}" data-active="0" class="toggle-btn" ${allInactive ? 'disabled' : ''}>Dezactiveaza toate produsele</button>
+        <button data-id="${s.id}" data-active="1" class="toggle-btn" ${allActive ? 'disabled' : ''}>Activeaza toate produsele</button>
+      </div>
+    </div>
+  `;
+  }).join('');
+
+  el.querySelectorAll('.toggle-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const active = btn.dataset.active === '1';
+      const label = active ? 'activezi' : 'dezactivezi';
+      if (!confirm(`Sigur vrei sa ${label} toate produsele acestui vanzator?`)) return;
+      btn.disabled = true;
+      await fetch(`/api/admin/vanzatori/${btn.dataset.id}/produse-active`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active }),
+      });
+      loadVanzatori();
+    });
+  });
+}
+
+/* ---------- WhatsApp ---------- */
+let waThreads = [];
+let waCurrentPhone = null;
+let waRenderedThreadCount = 0;
+
+function waGetLastSeenMap() {
+  try { return JSON.parse(localStorage.getItem('wa_admin_last_seen') || '{}'); } catch (err) { return {}; }
+}
+function waSetLastSeen(phone, iso) {
+  try {
+    const map = waGetLastSeenMap();
+    map[phone] = iso;
+    localStorage.setItem('wa_admin_last_seen', JSON.stringify(map));
+  } catch (err) { /* doar comoditate vizuala - fara efecte negative */ }
+}
+function waFormatTime(iso) {
+  const d = new Date(iso + 'Z');
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' });
+  const sameYear = d.getFullYear() === now.getFullYear();
+  return d.toLocaleDateString('ro-RO', sameYear ? { day: '2-digit', month: '2-digit' } : { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+function waFormatBubbleTime(iso) { return new Date(iso + 'Z').toLocaleString('ro-RO'); }
+
+function waRebuildThreads(messages) {
+  const byPhone = new Map();
+  for (const m of messages) {
+    if (!byPhone.has(m.fromPhone)) byPhone.set(m.fromPhone, []);
+    byPhone.get(m.fromPhone).push(m);
+  }
+  waThreads = Array.from(byPhone.entries()).map(([phone, msgs]) => {
+    msgs.sort((a, b) => new Date(a.receivedAt) - new Date(b.receivedAt));
+    return { phone, msgs, lastAt: msgs[msgs.length - 1].receivedAt, lastMsg: msgs[msgs.length - 1] };
+  });
+  waThreads.sort((a, b) => new Date(b.lastAt) - new Date(a.lastAt));
+}
+
+function waRenderList() {
+  const el = document.getElementById('wa-conv-list');
+  if (!waThreads.length) {
+    el.innerHTML = '<div class="empty-state">Nu a fost primit inca niciun mesaj.</div>';
+    return;
+  }
+  const lastSeen = waGetLastSeenMap();
+  let anyUnread = false;
+  el.innerHTML = waThreads.map((t) => {
+    const unread = t.lastMsg.direction !== 'out' && (!lastSeen[t.phone] || new Date(lastSeen[t.phone]) < new Date(t.lastMsg.receivedAt));
+    if (unread) anyUnread = true;
+    const initials = t.phone.slice(-2);
+    return `
+      <div class="conv-row${unread ? ' unread' : ''}${t.phone === waCurrentPhone ? ' selected' : ''}" data-phone="${escapeHtml(t.phone)}">
+        <div class="conv-avatar">${escapeHtml(initials)}</div>
+        <div class="conv-main">
+          <div class="conv-top-line">
+            <span class="conv-phone">+${escapeHtml(t.phone)}</span>
+            <span class="conv-time">${waFormatTime(t.lastMsg.receivedAt)}</span>
+          </div>
+          <div class="conv-preview">${t.lastMsg.direction === 'out' ? 'Tu: ' : ''}${escapeHtml(t.lastMsg.body)}</div>
+        </div>
+        ${unread ? '<div class="conv-unread-dot"></div>' : ''}
+      </div>
+    `;
+  }).join('');
+  document.getElementById('wa-unread-dot').style.display = anyUnread ? 'inline-block' : 'none';
+  el.querySelectorAll('.conv-row').forEach((row) => {
+    row.addEventListener('click', () => waOpenThread(row.dataset.phone));
+  });
+}
+
+function waOpenThread(phone) {
+  waCurrentPhone = phone;
+  waRenderedThreadCount = 0;
+  document.getElementById('wa-thread-empty').style.display = 'none';
+  document.getElementById('wa-thread-open').style.display = 'flex';
+  waRenderThread(true);
+  waRenderList();
+}
+
+function waRenderThread(forceScroll) {
+  if (!waCurrentPhone) return;
+  document.getElementById('wa-thread-phone').textContent = '+' + waCurrentPhone;
+  document.getElementById('wa-reply-form').dataset.phone = waCurrentPhone;
+  const thread = waThreads.find((t) => t.phone === waCurrentPhone);
+  const el = document.getElementById('wa-thread-messages');
+  if (!thread) {
+    el.innerHTML = '<div class="empty-state">Aceasta conversatie nu mai exista.</div>';
+    waRenderedThreadCount = 0;
+    return;
+  }
+  if (!forceScroll && thread.msgs.length === waRenderedThreadCount) return;
+  const nearBottomBefore = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  el.innerHTML = thread.msgs.map((m) => `
+    <div class="bubble ${m.direction === 'out' ? 'out' : 'in'}">
+      <span class="text">${escapeHtml(m.body)}</span>
+      <span class="time">${waFormatBubbleTime(m.receivedAt)}</span>
+    </div>
+  `).join('');
+  waRenderedThreadCount = thread.msgs.length;
+  if (forceScroll || nearBottomBefore) el.scrollTop = el.scrollHeight;
+  waSetLastSeen(waCurrentPhone, thread.lastAt);
+}
+
+async function refreshWhatsapp() {
+  const res = await fetch('/api/admin/whatsapp-mesaje');
+  if (res.status === 401) { location.href = '/admin/login.html'; return; }
+  const messages = await res.json();
+  waRebuildThreads(messages);
+  waRenderList();
+  if (waCurrentPhone) waRenderThread(false);
+}
+
+document.getElementById('wa-reply-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const form = event.target;
+  const phone = form.dataset.phone;
+  const btn = form.querySelector('button');
+  const fb = document.getElementById('wa-reply-feedback');
+  const textarea = document.getElementById('wa-reply-text');
+  const text = textarea.value.trim();
+  if (!text || !phone) return;
+  btn.disabled = true;
+  fb.textContent = '';
+  try {
+    const res = await fetch('/api/admin/whatsapp-trimite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ toPhone: phone, body: text }),
+    });
+    if (res.status === 401) { location.href = '/admin/login.html'; return; }
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      fb.textContent = data.error || 'Eroare la trimitere.';
+      fb.style.color = 'var(--bad)';
+      btn.disabled = false;
+      return;
+    }
+    textarea.value = '';
+    await refreshWhatsapp();
+    waRenderThread(true);
+  } catch (err) {
+    fb.textContent = 'Eroare de retea. Incearca din nou.';
+    fb.style.color = 'var(--bad)';
+  }
+  btn.disabled = false;
+});
+
+document.getElementById('wa-reply-text').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    document.getElementById('wa-reply-form').requestSubmit();
+  }
+});
+
+function waUrlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
+document.getElementById('wa-push-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('wa-push-btn');
+  const fb = document.getElementById('wa-push-feedback');
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    fb.textContent = 'Browserul tau nu suporta notificari push.';
+    fb.style.color = 'var(--bad)';
+    return;
+  }
+  btn.disabled = true;
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      fb.textContent = 'Trebuie sa permiti notificarile din browser ca sa functioneze.';
+      fb.style.color = 'var(--bad)';
+      btn.disabled = false;
+      return;
+    }
+    const keyRes = await fetch('/api/push/public-key');
+    const keyData = await keyRes.json();
+    if (!keyData.publicKey) {
+      fb.textContent = 'Notificarile push nu sunt configurate momentan pe server.';
+      fb.style.color = 'var(--bad)';
+      btn.disabled = false;
+      return;
+    }
+    const subscription = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: waUrlBase64ToUint8Array(keyData.publicKey),
+    });
+    const res = await fetch('/api/admin/push-subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(subscription),
+    });
+    if (res.status === 401) { location.href = '/admin/login.html'; return; }
+    fb.textContent = 'Notificarile sunt active pe acest telefon/browser.';
+    fb.style.color = 'var(--good)';
+    btn.textContent = 'Notificari active';
+  } catch (err) {
+    fb.textContent = 'Eroare la activarea notificarilor.';
+    fb.style.color = 'var(--bad)';
+    btn.disabled = false;
+  }
+});
+
+/* ---------- Numere ---------- */
+let numereProducts = [];
+
+async function loadNumereProductSelect() {
+  const res = await fetch('/api/admin/produse');
+  if (res.status === 401) { location.href = '/admin/login.html'; return; }
+  numereProducts = await res.json();
+  const sel = document.getElementById('numere-product-select');
+  if (!numereProducts.length) {
+    sel.innerHTML = '<option>Nu exista produse</option>';
+    return;
+  }
+  const currentId = sel.dataset.selectedId || numereProducts[0].id;
+  sel.innerHTML = numereProducts.map(p => `<option value="${p.id}" ${p.id === currentId ? 'selected' : ''}>${escapeHtml(p.name)} (${escapeHtml(p.sellerName)})</option>`).join('');
+  sel.dataset.selectedId = currentId;
+}
+
+function selectNumereProduct(id) {
+  const sel = document.getElementById('numere-product-select');
+  sel.dataset.selectedId = id;
+  if (sel.querySelector(`option[value="${id}"]`)) sel.value = id;
+  loadNumere();
+}
+
+document.getElementById('numere-product-select').addEventListener('change', (e) => {
+  document.getElementById('numere-product-select').dataset.selectedId = e.target.value;
+  loadNumere();
+});
+
+async function loadNumere() {
+  await loadNumereProductSelect();
+  const sel = document.getElementById('numere-product-select');
+  const id = sel.dataset.selectedId;
+  const el = document.getElementById('numere-content');
+  if (!id) {
+    el.innerHTML = '<p style="color:#9aa0ab;">Nu exista produse.</p>';
+    return;
+  }
+  const res = await fetch(`/api/admin/produse/${encodeURIComponent(id)}/numere`);
+  if (res.status === 401) { location.href = '/admin/login.html'; return; }
+  if (res.status === 404) {
+    el.innerHTML = '<p style="color:#9aa0ab;">Produs inexistent.</p>';
+    return;
+  }
+  const data = await res.json();
+  document.getElementById('numere-titlu').textContent = 'Numere - ' + data.product.name;
+
+  const total = data.numbers.length;
+  const achizitionate = data.numbers.filter(n => n.purchased).length;
+
+  if (!total) {
+    el.innerHTML = '<p style="color:#9aa0ab;">Acest produs nu are inca niciun numar in stoc.</p>';
+    return;
+  }
+
+  const perRow = 10;
+  const rows = [];
+  for (let i = 0; i < data.numbers.length; i += perRow) rows.push(data.numbers.slice(i, i + perRow));
+
+  el.innerHTML = `
+    <div class="stat-line">${achizitionate} / ${total} numere achizitionate</div>
+    <div class="legend">
+      <span><span class="swatch green"></span>Achizitionat</span>
+      <span><span class="swatch red"></span>Neachizitionat</span>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="numere">
+        <tbody>
+          ${rows.map(row => `
+            <tr>
+              ${row.map(n => {
+                const title = n.purchased
+                  ? `Numar ${n.number} - ${n.buyerName ? escapeHtml(n.buyerName) : 'cumparator'}${n.buyerPhone ? ' - ' + escapeHtml(n.buyerPhone) : ''}`
+                  : `Numar ${n.number} - neachizitionat`;
+                return `<td class="${n.purchased ? 'numar-achizitionat' : 'numar-liber'}" title="${title}">${n.number}</td>`;
+              }).join('')}
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+/* ---------- Logout + start ---------- */
 document.getElementById('logout-btn').addEventListener('click', async () => {
   await fetch('/api/admin/logout', { method: 'POST' });
   location.href = '/admin/login.html';
 });
 
-loadStats();
-loadProducts();
-setInterval(() => { loadStats(); loadProducts(); }, 7000);
+activateTab(tabFromLocation(), { skipHash: true });
+// Statisticile generale se actualizeaza mereu (sunt ieftine); restul
+// tab-urilor se reincarca doar cat timp sunt active, ca sa nu facem cereri
+// inutile pe tab-uri pe care adminul nu se uita in acel moment.
+setInterval(() => { loadStats(); if (activeTab !== 'general') return; loadProducts(); }, 7000);
+setInterval(() => {
+  if (activeTab === 'comenzi') loadComenzi();
+  else if (activeTab === 'vanzatori') loadVanzatori();
+  else if (activeTab === 'whatsapp') refreshWhatsapp();
+  else if (activeTab === 'numere') loadNumere();
+}, 7000);
 </script>
 </body>
 </html>
-

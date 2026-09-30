@@ -28,6 +28,10 @@
   .badge.locked { background:#331c1c; color:#ffb3b3; }
   .badge.pending { background:#332c1c; color:#ffdca0; }
   .export-btn { width:auto; padding:6px 12px; font-size:0.8rem; }
+  .tickets-cell { max-width:220px; }
+  .tickets-cell details summary { cursor:pointer; color:#6c8cff; list-style:none; }
+  .tickets-cell details summary::-webkit-details-marker { display:none; }
+  .tickets-cell .tickets-list { margin-top:6px; max-height:140px; overflow-y:auto; white-space:normal; color:#9aa0ab; font-size:0.8rem; }
 
   /* Taburi */
   .tabs { display:flex; gap:4px; margin-bottom:22px; flex-wrap:wrap; border-bottom:1px solid var(--border); }
@@ -297,7 +301,7 @@ async function loadComenzi() {
             <td>${escapeHtml(o.buyerEmail || '-')}</td>
             <td>${escapeHtml(o.buyerAddress || '-')}</td>
             <td>${o.quantity}</td>
-            <td>${o.tickets.map(n => '#' + n).join(', ') || '-'}</td>
+            <td class="tickets-cell">${o.tickets.length ? `<details><summary>${o.tickets.length} numere</summary><div class="tickets-list">${o.tickets.map(n => '#' + n).join(', ')}</div></details>` : '-'}</td>
             <td>${(o.amountBani/100).toFixed(2)} RON</td>
             <td>${(o.platformFeeBani/100).toFixed(2)} RON</td>
             <td><span class="badge ${o.status}">${orderStatusLabels[o.status] || o.status}</span></td>

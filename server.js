@@ -498,7 +498,7 @@ app.get('/api/produs/:id/numere', (req, res) => {
 
 app.post('/api/checkout', async (req, res) => {
   try {
-    const { productId, name, phone, email, address } = req.body;
+    const { productId, name, phone, email, address, termsAccepted } = req.body;
     // Metoda de plata aleasa de client: 'payu' (implicit) sau 'stripe'.
     let paymentMethod = req.body.paymentMethod === 'stripe' ? 'stripe' : 'payu';
     // PayU este ascuns temporar (HIDE_PAYU) - orice cerere care ar folosi PayU
@@ -524,10 +524,20 @@ app.post('/api/checkout', async (req, res) => {
     if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       return res.status(400).json({ error: 'Adresa de email nu este valida.' });
     }
-    // Adresa e optionala - clientul o completeaza doar daca vrea factura cu
-    // datele complete; fara ea, factura Oblio se emite in continuare, doar
-    // fara linia de adresa.
+    // Adresa este obligatorie - factura Oblio emisa automat are nevoie de ea
+    // (fara adresa, factura nu poate fi emisa corect).
     const trimmedAddress = address && String(address).trim() ? String(address).trim() : null;
+    if (!trimmedAddress) {
+      return res.status(400).json({ error: 'Adresa este obligatorie - este necesara pentru emiterea facturii.' });
+    }
+
+    // Consimtamantul la Termeni si conditii trebuie bifat explicit de client
+    // (checkbox necompletat implicit) - o bifa pusa automat de noi nu ar avea
+    // valoare legala in caz de disputa sau control ANPC.
+    const termsWereAccepted = termsAccepted === true || termsAccepted === 'true';
+    if (!termsWereAccepted) {
+      return res.status(400).json({ error: 'Trebuie sa fii de acord cu Termenii si conditiile pentru a continua.' });
+    }
 
     const product = getProduct(productId);
     if (!product || !product.active) return res.status(404).json({ error: 'Produs inexistent.' });
@@ -548,9 +558,9 @@ app.post('/api/checkout', async (req, res) => {
     const feeBani = 0; // Fara marketplace/split - toti banii merg direct in contul PayU al platformei.
 
     db.prepare(
-      `INSERT INTO orders (id, product_id, seller_id, buyer_name, buyer_phone, buyer_email, buyer_address, quantity, attempts_left, amount_bani, platform_fee_bani, payment_method)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(orderId, product.id, seller.id, String(name).trim(), String(phone).trim(), trimmedEmail, trimmedAddress, quantity, MAX_ATTEMPTS, totalBani, feeBani, paymentMethod);
+      `INSERT INTO orders (id, product_id, seller_id, buyer_name, buyer_phone, buyer_email, buyer_address, quantity, attempts_left, amount_bani, platform_fee_bani, payment_method, terms_accepted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(orderId, product.id, seller.id, String(name).trim(), String(phone).trim(), trimmedEmail, trimmedAddress, quantity, MAX_ATTEMPTS, totalBani, feeBani, paymentMethod, new Date().toISOString());
 
     if (paymentMethod === 'stripe') {
       const { redirectUrl, sessionId } = await stripeClient.createCheckoutSession({

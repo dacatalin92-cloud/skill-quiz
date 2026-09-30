@@ -124,6 +124,15 @@ if (!orderColumns.includes('reminder_24h_sent')) {
   db.exec('ALTER TABLE orders ADD COLUMN reminder_24h_sent INTEGER NOT NULL DEFAULT 0');
 }
 
+// Migratie usoara: adauga coloana terms_accepted_at - inregistreaza momentul
+// exact in care cumparatorul a bifat explicit "sunt de acord cu Termenii si
+// conditiile" la checkout, ca dovada in caz de disputa cu un client sau
+// control ANPC (checkbox-ul nu e prebifat de noi, deci bifa reprezinta o
+// actiune deliberata a clientului).
+if (!orderColumns.includes('terms_accepted_at')) {
+  db.exec('ALTER TABLE orders ADD COLUMN terms_accepted_at TEXT');
+}
+
 // Tabel pentru mesajele WhatsApp primite de la clienti (raspunsuri la
 // notificarile automate de produs nou), afisate in panoul de admin.
 db.exec(`

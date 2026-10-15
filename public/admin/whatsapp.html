@@ -17,7 +17,7 @@
   .screen { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 
   /* Lista de conversatii */
-  .app-header { padding: 14px 16px 8px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .app-header { padding: 14px 16px 8px; padding-top: max(14px, env(safe-area-inset-top)); border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .app-header-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
   .app-header-row h1 { margin: 0; font-size: 1.25rem; }
   .header-actions { display: flex; align-items: center; gap: 12px; font-size: 0.85rem; }
@@ -27,7 +27,7 @@
   .feedback-line { font-size: 0.78rem; margin-top: 6px; min-height: 1em; }
 
   .conv-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-  .conv-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .conv-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; min-height: 56px; border-bottom: 1px solid var(--border); cursor: pointer; }
   .conv-row:active { background: rgba(255,255,255,0.04); }
   .conv-avatar { flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%; background: var(--card); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-weight: 600; color: var(--accent); font-size: 0.85rem; }
   .conv-main { flex: 1; min-width: 0; }
@@ -40,8 +40,7 @@
   .empty-state { padding: 40px 20px; text-align: center; color: var(--muted); }
 
   /* Conversatie individuala */
-  .thread-header { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .icon-btn { width: auto; background: transparent; border: none; color: var(--text); font-size: 1.5rem; padding: 4px 10px; cursor: pointer; line-height: 1; }
+  .thread-header { display: flex; align-items: center; gap: 6px; padding: 8px 10px; padding-top: max(8px, env(safe-area-inset-top)); border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .thread-title { display: flex; flex-direction: column; min-width: 0; }
   .thread-title .thread-phone-label { font-weight: 600; font-size: 1rem; }
   .thread-hint { font-size: 0.7rem; color: var(--muted); }

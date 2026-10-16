@@ -368,8 +368,8 @@ function publicProduct(product, seller) {
 
 function requireSeller(req, res, next) {
   const sellerId = getSellerIdFromReq(req);
-  if (!sellerId) return res.status(401).json({ error: 'Trebuie sa fii autentificat.' });
-  const seller = getSeller(sellerId);
+  let seller = sellerId ? getSeller(sellerId) : null; if (!seller && isAdminReq(req)) { seller = db.prepare('SELECT * FROM sellers ORDER BY created_at ASC LIMIT 1').get(); }
+  
   if (!seller) return res.status(401).json({ error: 'Cont inexistent.' });
   req.seller = seller;
   next();

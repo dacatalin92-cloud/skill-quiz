@@ -6,22 +6,31 @@
 <title>Numere produs</title>
 <link rel="stylesheet" href="/style.css" />
 <style>
-  .legend { display:flex; align-items:center; gap:18px; margin:14px 0 18px; font-size:0.85rem; color:#9aa0ab; }
-  .legend .swatch { display:inline-block; width:14px; height:14px; border-radius:4px; margin-right:6px; vertical-align:middle; }
-  .swatch.green { background:#1c5c34; }
-  .swatch.red { background:#5c1c1c; }
-  .stat-line { color:#9aa0ab; font-size:0.9rem; margin-bottom:4px; }
-  table.numere { width:100%; border-collapse: separate; border-spacing: 4px; margin-top: 6px; table-layout: fixed; }
-  table.numere td {
-    text-align:center;
-    padding: 8px 4px;
-    border-radius: 8px;
-    font-size: 0.8rem;
-    font-weight:600;
-    cursor:default;
-  }
-  td.numar-achizitionat { background:#1c5c34; color:#c6f5d6; }
-  td.numar-liber { background:#3a1f1f; color:#ffb3b3; }
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; }
+  @media (max-width: 480px) { .panel { padding:18px; } }
+
+  .stats-row { display:grid; grid-template-columns:repeat(auto-fit, minmax(110px, 1fr)); gap:10px; margin-bottom:14px; }
+  .stat-card { background:#10131a; border:1px solid var(--border); border-radius:12px; padding:14px 10px; text-align:center; }
+  .stat-card .stat-value { font-size:1.45rem; font-weight:700; }
+  .stat-card.sold .stat-value { color: var(--good); }
+  .stat-card.free .stat-value { color: var(--bad); }
+  .stat-card .stat-label { color:var(--muted); font-size:0.72rem; margin-top:3px; text-transform:uppercase; letter-spacing:0.04em; }
+
+  .progress-bar { height:8px; border-radius:6px; background:#20242e; overflow:hidden; margin-bottom:6px; }
+  .progress-fill { height:100%; background: linear-gradient(90deg, var(--accent), var(--good)); border-radius:6px; transition:width 0.4s ease; }
+  .progress-label { font-size:0.8rem; color:var(--muted); margin-bottom:18px; }
+
+  .legend { display:flex; gap:18px; font-size:0.82rem; color:var(--muted); margin-bottom:14px; flex-wrap:wrap; }
+  .legend-item { display:flex; align-items:center; gap:6px; }
+  .dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
+  .dot.green { background: var(--good); }
+  .dot.red { background: var(--bad); }
+
+  .numbers-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(46px, 1fr)); gap:8px; }
+  .num-chip { border:none; border-radius:10px; padding:10px 0; font-size:0.8rem; font-weight:700; cursor:default; transition:transform 0.12s ease, box-shadow 0.12s ease; font-family:inherit; }
+  .num-chip.achizitionat { background:rgba(53,194,107,0.15); color:#8df0b0; box-shadow:inset 0 0 0 1px rgba(53,194,107,0.35); }
+  .num-chip.liber { background:rgba(255,92,92,0.08); color:#ff9d9d; box-shadow:inset 0 0 0 1px rgba(255,92,92,0.25); }
+  .num-chip:hover { transform:scale(1.08); }
 </style>
 </head>
 <body>
@@ -30,7 +39,9 @@
   <p>Toate numerele posibile ale produsului: verde = achizitionat, rosu = inca liber.</p>
 </header>
 <main>
-  <div id="content" class="question-card">Se incarca...</div>
+  <div class="panel">
+    <div id="content">Se incarca...</div>
+  </div>
   <p style="text-align:center;margin-top:16px;"><a href="/" style="color:#6c8cff;">&larr; Inapoi la produse</a></p>
 </main>
 <footer>
@@ -47,43 +58,46 @@ async function load() {
   const res = await fetch(`/api/produs/${encodeURIComponent(productId)}/numere`);
   if (!res.ok) { contentEl.innerHTML = '<p>Produsul nu a fost gasit.</p>'; return; }
   const data = await res.json();
-  document.getElementById('title').textContent = `Numere — ${data.productName}`;
+  document.getElementById('title').textContent = `Numere - ${data.productName}`;
 
   const total = data.numbers.length;
   const achizitionate = data.numbers.filter(n => n.purchased).length;
+  const libere = total - achizitionate;
+  const pct = total ? Math.round((achizitionate / total) * 100) : 0;
 
   if (!total) {
     contentEl.innerHTML = '<p style="color:#9aa0ab;">Acest produs nu are inca niciun numar in stoc.</p>';
     return;
   }
 
-  const perRow = 10;
-  const rows = [];
-  for (let i = 0; i < data.numbers.length; i += perRow) {
-    rows.push(data.numbers.slice(i, i + perRow));
-  }
-
   contentEl.innerHTML = `
-    <div class="stat-line">${achizitionate} / ${total} numere achizitionate</div>
-    <div class="legend">
-      <span><span class="swatch green"></span>Achizitionat</span>
-      <span><span class="swatch red"></span>Liber</span>
+    <div class="stats-row">
+      <div class="stat-card sold">
+        <div class="stat-value">${achizitionate}</div>
+        <div class="stat-label">Achizitionate</div>
+      </div>
+      <div class="stat-card free">
+        <div class="stat-value">${libere}</div>
+        <div class="stat-label">Disponibile</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${total}</div>
+        <div class="stat-label">Total numere</div>
+      </div>
     </div>
-    <div style="overflow-x:auto;">
-      <table class="numere">
-        <tbody>
-          ${rows.map(row => `
-            <tr>
-              ${row.map(n => {
-                const title = n.purchased
-                  ? `Numar ${n.number} - achizitionat de ${n.firstName ? escapeHtml(n.firstName) : 'un client'}`
-                  : `Numar ${n.number} - liber`;
-                return `<td class="${n.purchased ? 'numar-achizitionat' : 'numar-liber'}" title="${title}">${n.number}</td>`;
-              }).join('')}
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
+    <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+    <div class="progress-label">${pct}% vandute</div>
+    <div class="legend">
+      <span class="legend-item"><span class="dot green"></span>Achizitionat</span>
+      <span class="legend-item"><span class="dot red"></span>Liber</span>
+    </div>
+    <div class="numbers-grid">
+      ${data.numbers.map(n => {
+        const title = n.purchased
+          ? `Numar ${n.number} - achizitionat de ${n.firstName ? escapeHtml(n.firstName) : 'un client'}`
+          : `Numar ${n.number} - liber`;
+        return `<button type="button" class="num-chip ${n.purchased ? 'achizitionat' : 'liber'}" title="${title}">${n.number}</button>`;
+      }).join('')}
     </div>
   `;
 }

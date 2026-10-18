@@ -28,7 +28,7 @@
     cursor:default;
   }
   td.numar-achizitionat { background:#1c5c34; color:#c6f5d6; }
-  td.numar-liber { background:#3a1f1f; color:#ffb3b3; }
+  td.numar-liber { background:#3a1f1f; color:#ffb3b3; } td.numar-cautat { outline: 3px solid #ffd166; outline-offset: -2px; }
 </style>
 </head>
 <body>
@@ -53,12 +53,12 @@
       <select id="product-select"><option>Se incarca...</option></select>
     </label>
   </div>
-  <div id="content" class="question-card">Se incarca...</div>
+  <div class="row" style="margin-bottom:10px;gap:8px;"><label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;color:#9aa0ab;flex:1;">Cauta castigatorul dupa numar de bilet: <input id="search-number" type="number" min="1" placeholder="ex: 42" style="width:120px;padding:8px 12px;" /></label><button id="search-btn" type="button" style="width:auto;padding:8px 16px;">Cauta</button></div><div id="search-result"></div><div id="content" class="question-card">Se incarca...</div>
 </main>
 
 <script src="/common.js"></script>
 <script>
-function currentId() {
+let lastNumbers = []; function currentId() {
   return new URLSearchParams(location.search).get('id');
 }
 
@@ -95,7 +95,7 @@ async function loadNumere() {
     el.innerHTML = '<p style="color:#9aa0ab;">Produs inexistent.</p>';
     return;
   }
-  const data = await res.json();
+  const data = await res.json(); lastNumbers = data.numbers;
   document.getElementById('titlu').textContent = 'Numere - ' + data.product.name;
 
   const total = data.numbers.length;
@@ -127,7 +127,7 @@ async function loadNumere() {
                 const title = n.purchased
                   ? `Numar ${n.number} - ${n.buyerName ? escapeHtml(n.buyerName) : 'cumparator'}${n.buyerPhone ? ' - ' + escapeHtml(n.buyerPhone) : ''}`
                   : `Numar ${n.number} - neachizitionat`;
-                return `<td class="${n.purchased ? 'numar-achizitionat' : 'numar-liber'}" title="${title}">${n.number}</td>`;
+                return `<td class="${n.purchased ? 'numar-achizitionat' : 'numar-liber'}" data-number="${n.number}" title="${title}">${n.number}</td>`;
               }).join('')}
             </tr>
           `).join('')}
@@ -137,7 +137,7 @@ async function loadNumere() {
   `;
 }
 
-document.getElementById('logout-btn').addEventListener('click', async () => {
+function formatPurchasedAt(iso) { return new Date(iso + 'Z').toLocaleString('ro-RO'); } function searchWinner() { const input = document.getElementById('search-number'); const resultEl = document.getElementById('search-result'); const raw = input.value.trim(); const num = parseInt(raw, 10); document.querySelectorAll('table.numere td.numar-cautat').forEach((td) => td.classList.remove('numar-cautat')); if (!raw || isNaN(num)) { resultEl.innerHTML = '<p style="color:#9aa0ab;">Introdu un numar de bilet.</p>'; return; } const entry = lastNumbers.find((n) => n.number === num); if (!entry) { resultEl.innerHTML = `<p style="color:#9aa0ab;">Numarul ${num} nu exista pentru acest produs.</p>`; return; } if (!entry.purchased) { resultEl.innerHTML = `<p style="color:#ffb3b3;">Numarul ${num} nu a fost inca achizitionat.</p>`; return; } resultEl.innerHTML = `<div class="question-card" style="margin-bottom:14px;border:1px solid #1c5c34;"><div style="font-weight:700;font-size:1.05rem;margin-bottom:8px;">Castigator - numar ${num}</div><div><strong>Client:</strong> ${escapeHtml(entry.buyerName || '-')}</div><div><strong>Telefon:</strong> ${escapeHtml(entry.buyerPhone || '-')}</div><div style="display:flex;align-items:center;gap:8px;"><strong>ID comanda:</strong> <code id="winner-order-id" style="background:#1c2333;padding:2px 8px;border-radius:6px;">${escapeHtml(entry.orderId)}</code> <button type="button" id="copy-order-id" style="width:auto;padding:4px 10px;font-size:0.78rem;">Copiaza</button></div><div style="margin-top:4px;color:#9aa0ab;font-size:0.85rem;">Achizitionat la: ${entry.purchasedAt ? formatPurchasedAt(entry.purchasedAt) : '-'}</div></div>`; const copyBtn = document.getElementById('copy-order-id'); if (copyBtn) { copyBtn.addEventListener('click', () => { navigator.clipboard.writeText(entry.orderId).catch(() => {}); }); } const cell = document.querySelector(`table.numere td[data-number="${num}"]`); if (cell) { cell.classList.add('numar-cautat'); cell.scrollIntoView({ behavior: 'smooth', block: 'center' }); } } document.getElementById('search-btn').addEventListener('click', searchWinner); document.getElementById('search-number').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); searchWinner(); } }); document.getElementById('logout-btn').addEventListener('click', async () => {
   await fetch('/api/admin/logout', { method: 'POST' });
   location.href = '/admin/login.html';
 });

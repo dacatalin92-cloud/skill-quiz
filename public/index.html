@@ -11,32 +11,97 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <link rel="stylesheet" href="/style.css" />
 <style>
-  .stock { font-size:0.82rem; margin-bottom:10px; }
-  .stock.ok { color:#a4f0bb; }
-  .stock.low { color:#ffcf7d; }
-  .stock.out { color:#ff8080; }
-  .buy-form input[type=text], .buy-form input[type=tel], .buy-form input[type=number] {
-    width:100%; padding:10px 12px; margin-bottom:10px; border-radius:8px;
-    border:1px solid #2a2e38; background:#10131a; color:#e8eaed; font-size:0.9rem;
+  .trust-strip { display:flex; align-items:center; justify-content:center; gap:22px; flex-wrap:wrap; padding:12px 16px 0; font-size:0.78rem; color:var(--muted); }
+  .trust-strip span { display:flex; align-items:center; gap:6px; }
+  .trust-strip svg { flex-shrink:0; opacity:0.85; }
+
+  header { padding-top:22px; }
+  .eyebrow { text-align:center; text-transform:uppercase; letter-spacing:0.09em; font-size:0.72rem; font-weight:700; color:var(--accent); margin-bottom:10px; }
+  header h1 { font-size:1.85rem; }
+
+  .steps { display:flex; align-items:flex-start; justify-content:center; gap:6px; margin-top:24px; flex-wrap:wrap; max-width:620px; margin-inline:auto; }
+  .step { display:flex; flex-direction:column; align-items:center; gap:7px; width:96px; }
+  .step-num { width:30px; height:30px; border-radius:50%; background: var(--card); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:0.85rem; color:var(--accent); }
+  .step-text { font-size:0.74rem; color:var(--muted); text-align:center; line-height:1.3; }
+  .step-line { width:34px; height:1px; background:var(--border); margin-top:15px; flex-shrink:0; }
+  @media (max-width:560px) { .step-line { display:none; } }
+
+  .promo-bar { max-width:720px; margin:26px auto 0; background: var(--card); border:1px solid var(--border); border-radius: 12px; padding:16px 20px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .promo-bar-icon { width:36px; height:36px; border-radius:10px; background:#10131a; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0; color:var(--accent); }
+  .promo-bar-text { flex:1 1 220px; font-size:0.86rem; color:var(--muted); }
+  .promo-bar-text strong { color:var(--text); font-weight:600; }
+  #subscribe-form { display:flex; gap:8px; flex:1 1 320px; }
+  #subscribe-form input { flex:1; min-width:0; padding:10px 12px; border-radius:9px; border:1px solid #2a2e38; background:#10131a; color:#e8eaed; font-size:0.88rem; }
+  #subscribe-form button { width:auto; padding:10px 18px; border-radius:9px; flex-shrink:0; }
+  #subscribe-feedback { font-size:0.82rem; margin-top:8px; width:100%; }
+  .promo-secondary { margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; width:100%; }
+  .promo-secondary button { width:auto; padding:8px 14px; border-radius:9px; background:transparent; border:1px solid var(--border); color:var(--muted); font-size:0.82rem; }
+  .promo-secondary button:hover { border-color: var(--accent); color:var(--text); }
+  #push-feedback { font-size:0.82rem; margin-top:6px; width:100%; }
+
+  .card { overflow:hidden; border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,0.4); transition: transform 0.18s ease, box-shadow 0.18s ease; display:flex; flex-direction:column; }
+  .card:hover { transform: translateY(-3px); box-shadow: 0 18px 38px rgba(0,0,0,0.38); }
+  .card-image-link { display:block; color:inherit; text-decoration:none; }
+  .card-image { margin:-20px -20px 16px; aspect-ratio: 4 / 3; overflow:hidden; background: linear-gradient(135deg, #1d212b, #11141a); }
+  .card-image img { width:100%; height:100%; object-fit:cover; display:block; }
+  .card h3 { margin:0 0 6px; font-size:1.08rem; }
+  .card h3 a { color:inherit; text-decoration:none; }
+  .card h3 a:hover { color: var(--accent); }
+  .card p { color: var(--muted); font-size:0.88rem; margin:0 0 14px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+
+  .stock-pill { display:inline-flex; align-items:center; gap:7px; padding:5px 12px; border-radius:20px; font-size:0.76rem; font-weight:600; margin-bottom:10px; background:#10131a; border:1px solid var(--border); color:var(--muted); }
+  .stock-pill .dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+  .stock-pill.ok .dot { background:var(--good); } .stock-pill.ok { color:#c7f3d6; }
+  .stock-pill.low .dot { background:#ffcf7d; } .stock-pill.low { color:#ffe3b0; }
+  .stock-pill.out .dot { background:var(--bad); } .stock-pill.out { color:#ffc2c2; }
+
+  .stock-bar-bg { height:5px; border-radius:4px; background:#20242e; overflow:hidden; margin:-4px 0 14px; }
+  .stock-bar-fill { height:100%; border-radius:4px; background:linear-gradient(90deg, var(--accent), var(--good)); }
+
+  .price-tag { font-size:1.3rem; font-weight:800; margin-bottom:16px; }
+  .price-tag .unit { font-size:0.76rem; font-weight:500; color:var(--muted); margin-left:4px; }
+
+  .view-btn { display:block; text-align:center; width:100%; padding:11px 14px; border-radius:10px; background:var(--accent); color:white; font-weight:700; text-decoration:none; box-shadow: 0 6px 18px rgba(108,140,255,0.28); transition: background 0.15s ease; margin-top:auto; }
+  .view-btn:hover { background: var(--accent-hover); }
+
+  @media (max-width: 480px) {
+    .promo-bar { flex-direction:column; align-items:stretch; padding:16px; }
+    #subscribe-form { flex-direction:column; }
   }
-  .participants-link { display:block; text-align:center; margin-top:10px; font-size:0.82rem; color:#6c8cff; }
-  .payment-method-choice { display:flex; gap:14px; margin-bottom:10px; font-size:0.85rem; color:#c7cad1; }
-  .payment-method-choice label { display:flex; align-items:center; gap:5px; cursor:pointer; }
-  .terms-check { display:flex; align-items:flex-start; gap:6px; margin:6px 0; font-size:0.78rem; color:#9aa0ab; line-height:1.4; cursor:pointer; }
-  .terms-check input { margin-top:2px; flex-shrink:0; width:auto; }
-  .terms-check a { color:#6c8cff; }
-  .secure-payment-badge { display:flex; align-items:center; gap:6px; margin:6px 0 10px; font-size:0.78rem; color:#9aa0ab; }
-  .stripe-brand { color:#635bff; }
 </style>
 </head>
 <body>
-<div style="max-width:720px;margin:0 auto;padding:16px 24px 0;text-align:right;">
-
+<div class="trust-strip">
+  <span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>Plata securizata</span>
+  <span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="6" width="15" height="12" rx="2"/><path d="M16 10h3l3 3v5h-6"/><circle cx="6" cy="19" r="2"/><circle cx="17.5" cy="19" r="2"/></svg>Livrare rapida</span>
+  <span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.4 8.4 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.4 8.4 0 01-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.4 8.4 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>Suport WhatsApp</span>
 </div>
 <header>
-  <h1>Concurs de abilitate</h1>
+  <div class="eyebrow">Concurs de abilitate</div>
+  <h1>Cumperi, raspunzi corect, castigi produsul</h1>
   <p>Alegi produsul, platesti, raspunzi corect la o intrebare simpla si primesti imediat produsul digital. Fiecare produs digital achizitionat prin abilitate contine un numar unic.</p>
-</header><div class="question-card" style="max-width:720px;margin:16px auto 0;padding:16px 20px;"><form id="subscribe-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><span style="flex:1 1 220px;color:#9aa0ab;font-size:0.9rem;">Vrei sa afli primul cand apare un produs nou? Lasa-ti numarul de WhatsApp:</span><input type="tel" id="subscribe-phone" placeholder="Numar WhatsApp (ex: 07xxxxxxxx)" required style="flex:2 1 200px;padding:10px 12px;border-radius:8px;border:1px solid #2a2e38;background:#10131a;color:#e8eaed;font-size:0.9rem;" /><button type="submit" style="width:auto;padding:10px 16px;">Aboneaza-te</button></form><div id="subscribe-feedback" style="font-size:0.85rem;margin-top:8px;"></div><div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><button id="push-btn" type="button" onclick="enablePushNotifications()" style="width:auto;padding:10px 16px;">Activeaza notificari pe telefon</button><button id="install-btn" type="button" onclick="installApp()" style="display:none;width:auto;padding:10px 16px;">Instaleaza aplicatia</button></div><div id="push-feedback" style="font-size:0.85rem;margin-top:6px;"></div></div>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-text">Alegi produsul</div></div>
+    <div class="step-line"></div>
+    <div class="step"><div class="step-num">2</div><div class="step-text">Raspunzi corect</div></div>
+    <div class="step-line"></div>
+    <div class="step"><div class="step-num">3</div><div class="step-text">Primesti produsul</div></div>
+  </div>
+</header>
+<div class="promo-bar">
+  <div class="promo-bar-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></div>
+  <div class="promo-bar-text"><strong>Produse noi?</strong> Fii primul anuntat pe WhatsApp.</div>
+  <form id="subscribe-form">
+    <input type="tel" id="subscribe-phone" placeholder="Numar WhatsApp (ex: 07xxxxxxxx)" required />
+    <button type="submit">Aboneaza-te</button>
+  </form>
+  <div id="subscribe-feedback"></div>
+  <div class="promo-secondary">
+    <button id="push-btn" type="button" onclick="enablePushNotifications()">Activeaza notificari</button>
+    <button id="install-btn" type="button" onclick="installApp()" style="display:none;">Instaleaza aplicatia</button>
+  </div>
+  <div id="push-feedback"></div>
+</div>
 <main>
   <div id="canceled-notice" class="notice error" style="display:none;">
     Plata a fost anulata. Poti incerca din nou oricand.
@@ -56,20 +121,7 @@ if (params.get('canceled')) {
   document.getElementById('canceled-notice').style.display = 'block';
 }
 
-let paymentMethods = { payu: true, stripe: false };
-
-async function loadPaymentMethods() {
-  try {
-    const res = await fetch('/api/payment-methods');
-    paymentMethods = await res.json();
-  } catch (err) {
-    // Daca cererea esueaza, ramanem pe implicit (doar PayU) - formularul
-    // de cumparare functioneaza in continuare.
-  }
-}
-
 async function loadProducts() {
-  await loadPaymentMethods();
   const res = await fetch('/api/products');
   const products = await res.json();
   const el = document.getElementById('products');
@@ -81,84 +133,21 @@ async function loadProducts() {
     const soldOut = p.stockRemaining <= 0;
     const stockClass = soldOut ? 'out' : (p.stockRemaining <= p.stockTotal * 0.1 ? 'low' : 'ok');
     const stockText = soldOut ? 'Stoc epuizat' : `${p.stockRemaining} din ${p.stockTotal} disponibile`;
+    const stockPct = p.stockTotal ? Math.max(0, Math.min(100, Math.round((p.stockRemaining / p.stockTotal) * 100))) : 0;
+    const href = `/produs.html?produs=${p.id}`;
     return `
     <div class="card">
-      <img src="${p.image ? escapeHtml(p.image) : '/img/placeholder.svg'}" alt="${escapeHtml(p.name)}" />
-      <h3>${escapeHtml(p.name)}</h3>
+      <a class="card-image-link" href="${href}"><div class="card-image"><img src="${p.image ? escapeHtml(p.image) : '/img/placeholder.svg'}" alt="${escapeHtml(p.name)}" /></div></a>
+      <h3><a href="${href}">${escapeHtml(p.name)}</a></h3>
       <p>${escapeHtml(p.description || '')}</p>
 
-      <div class="stock ${stockClass}">${stockText}</div>
-      <div class="price">${(p.priceBani / 100).toFixed(2)} ${ escapeHtml((p.currency || 'ron').toUpperCase()) } / bucata</div>
-      ${soldOut ? `
-        <button disabled>Stoc epuizat</button>
-      ` : `
-        <form class="buy-form" onsubmit="return startCheckout(event, '${p.id}')">
-          <input type="text" name="buyerName" placeholder="Numele tau" required />
-          <input type="tel" name="buyerPhone" placeholder="Numar de telefon" required />
-          <input type="email" name="buyerEmail" placeholder="Email (optional, pentru confirmare)" />
-          <input type="text" name="buyerAddress" placeholder="Adresa (necesara pentru factura)" required />
-          <input type="number" name="quantity" min="1" max="${p.stockRemaining}" value="1" required />
-          ${paymentMethods.payu && paymentMethods.stripe ? `
-          <div class="payment-method-choice">
-            <label><input type="radio" name="paymentMethod" value="payu" checked /> PayU</label>
-            <label><input type="radio" name="paymentMethod" value="stripe" /> Card (Stripe)</label>
-          </div>
-          ` : `<input type="hidden" name="paymentMethod" value="${paymentMethods.stripe ? 'stripe' : 'payu'}" />`}
-          <label class="terms-check">
-            <input type="checkbox" name="termsAccepted" required />
-            <span>Am citit si sunt de acord cu <a href="/termeni-si-conditii.html" target="_blank" rel="noopener">Termenii si conditiile</a> si <a href="/politica-confidentialitate.html" target="_blank" rel="noopener">Politica de confidentialitate</a>.</span>
-          </label>
-          ${paymentMethods.stripe ? `
-          <div class="secure-payment-badge">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-            <span>Plata securizata prin <strong class="stripe-brand">stripe</strong></span>
-          </div>
-          ` : ''}
-          <button type="submit">Cumpara</button>
-        </form>
-      `}
-      <a class="participants-link" href="/participanti.html?produs=${p.id}">Vezi lista participantilor &rarr;</a>
-      <a class="participants-link" href="/numere.html?produs=${p.id}">Vezi toate numerele &rarr;</a>
+      <div class="stock-pill ${stockClass}"><span class="dot"></span>${stockText}</div>
+      <div class="stock-bar-bg"><div class="stock-bar-fill" style="width:${stockPct}%"></div></div>
+      <div class="price-tag">${(p.priceBani / 100).toFixed(2)} ${ escapeHtml((p.currency || 'ron').toUpperCase()) }<span class="unit">/ bucata</span></div>
+      <a class="view-btn" href="${href}">Vezi produsul</a>
     </div>
   `;
   }).join('');
-}
-
-async function startCheckout(event, productId) {
-  event.preventDefault();
-  const form = event.target;
-  const button = form.querySelector('button');
-  button.disabled = true;
-  button.textContent = 'Se proceseaza...';
-  try {
-    const res = await fetch('/api/checkout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        productId,
-        name: form.buyerName.value,
-        phone: form.buyerPhone.value,
-        email: form.buyerEmail.value,
-        address: form.buyerAddress.value,
-        quantity: parseInt(form.quantity.value, 10),
-        paymentMethod: form.paymentMethod ? form.paymentMethod.value : 'payu',
-        termsAccepted: form.termsAccepted.checked,
-      }),
-    });
-    const data = await res.json();
-    if (data.url) {
-      location.href = data.url;
-    } else {
-      alert(data.error || 'A aparut o eroare. Incearca din nou.');
-      button.disabled = false;
-      button.textContent = 'Cumpara';
-    }
-  } catch (err) {
-    alert('A aparut o eroare de retea. Incearca din nou.');
-    button.disabled = false;
-    button.textContent = 'Cumpara';
-  }
-  return false;
 }
 
 loadProducts(); document.getElementById('subscribe-form').addEventListener('submit', function(e) { e.preventDefault(); const btn = e.target.querySelector('button'); const input = document.getElementById('subscribe-phone'); const fb = document.getElementById('subscribe-feedback'); btn.disabled = true; fetch('/api/abonare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: input.value }) }).then(function(res) { return res.json(); }).then(function(data) { if (data.ok) { fb.textContent = 'Te-ai abonat! Vei primi un mesaj WhatsApp la fiecare produs nou.'; fb.style.color = '#a4f0bb'; input.value = ''; } else { fb.textContent = data.error || 'Eroare la abonare.'; fb.style.color = '#ff8080'; } btn.disabled = false; }).catch(function() { fb.textContent = 'Eroare de retea. Incearca din nou.'; fb.style.color = '#ff8080'; btn.disabled = false; });});

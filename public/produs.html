@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Produs</title>
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#10131a" />
+<link rel="apple-touch-icon" href="/icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<link rel="stylesheet" href="/style.css" />
+<style>
+  main { max-width: 980px; }
+  .back-link { display:inline-flex; align-items:center; gap:6px; color:var(--muted); font-size:0.88rem; text-decoration:none; margin-bottom:18px; }
+  .back-link:hover { color: var(--accent); }
+
+  .product-layout { display:grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap:28px; background: var(--card); border:1px solid var(--border); border-radius:18px; padding:24px; }
+  @media (max-width: 760px) { .product-layout { grid-template-columns: 1fr; } }
+
+  .product-media { position:sticky; top:16px; align-self:start; }
+  @media (max-width: 760px) { .product-media { position:static; } }
+  .product-image { aspect-ratio: 4 / 3; border-radius:14px; overflow:hidden; background: linear-gradient(135deg, #1d212b, #11141a); }
+  .product-image img { width:100%; height:100%; object-fit:cover; display:block; }
+
+  .product-info h1 { margin:0 0 10px; font-size:1.5rem; }
+  .product-info > p.desc { color:var(--muted); font-size:0.95rem; margin:0 0 16px; }
+
+  .stock-pill { display:inline-flex; align-items:center; gap:7px; padding:5px 12px; border-radius:20px; font-size:0.76rem; font-weight:600; margin-bottom:10px; background:#10131a; border:1px solid var(--border); color:var(--muted); }
+  .stock-pill .dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+  .stock-pill.ok .dot { background:var(--good); } .stock-pill.ok { color:#c7f3d6; }
+  .stock-pill.low .dot { background:#ffcf7d; } .stock-pill.low { color:#ffe3b0; }
+  .stock-pill.out .dot { background:var(--bad); } .stock-pill.out { color:#ffc2c2; }
+
+  .stock-bar-bg { height:5px; border-radius:4px; background:#20242e; overflow:hidden; margin:-4px 0 16px; }
+  .stock-bar-fill { height:100%; border-radius:4px; background:linear-gradient(90deg, var(--accent), var(--good)); }
+
+  .price-tag { font-size:1.55rem; font-weight:800; margin-bottom:6px; }
+  .price-tag .unit { font-size:0.8rem; font-weight:500; color:var(--muted); margin-left:4px; }
+  .price-divider { height:1px; background:var(--border); margin:16px 0; }
+
+  .field-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media (max-width: 420px) { .field-row { grid-template-columns:1fr; } }
+  .field-group { margin-bottom:11px; }
+  .field-group label { display:block; font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--muted); margin-bottom:5px; }
+  .buy-form input[type=text], .buy-form input[type=tel], .buy-form input[type=email], .buy-form input[type=number] {
+    width:100%; padding:10px 12px; border-radius:9px;
+    border:1px solid #2a2e38; background:#10131a; color:#e8eaed; font-size:0.9rem;
+    transition: border-color 0.15s ease;
+  }
+  .buy-form input:focus { border-color: var(--accent); outline:none; }
+
+  .payment-method-choice { display:flex; gap:10px; margin-bottom:12px; }
+  .payment-method-choice label { flex:1; display:flex; align-items:center; justify-content:center; gap:6px; padding:10px; border:1px solid var(--border); border-radius:10px; cursor:pointer; font-size:0.85rem; color:var(--muted); background:#10131a; transition:border-color 0.15s ease, color 0.15s ease; }
+  .payment-method-choice label:has(input:checked) { border-color: var(--accent); color: var(--text); }
+  .payment-method-choice input { accent-color: var(--accent); }
+
+  .terms-check { display:flex; align-items:flex-start; gap:7px; margin:10px 0; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:#10131a; font-size:0.78rem; color:#9aa0ab; line-height:1.4; cursor:pointer; }
+  .terms-check input { margin-top:2px; flex-shrink:0; width:auto; accent-color: var(--accent); }
+  .terms-check a { color:#6c8cff; }
+
+  .secure-payment-badge { display:inline-flex; align-items:center; gap:6px; margin:2px 0 12px; padding:5px 11px; border-radius:20px; background:#10131a; border:1px solid var(--border); font-size:0.76rem; color:var(--muted); }
+  .stripe-brand { color:#9badff; }
+
+  .buy-form button[type=submit] { border-radius:10px; font-weight:700; padding:13px 14px; box-shadow: 0 6px 18px rgba(108,140,255,0.28); }
+
+  .extra-links { margin-top:18px; padding-top:18px; border-top:1px solid var(--border); display:flex; gap:10px; flex-wrap:wrap; }
+  .extra-links a { flex:1 1 180px; display:flex; align-items:center; justify-content:center; gap:6px; padding:10px 14px; border:1px solid var(--border); border-radius:10px; color:var(--muted); font-size:0.85rem; text-decoration:none; background:#10131a; }
+  .extra-links a:hover { border-color: var(--accent); color: var(--text); }
+
+  .not-found { text-align:center; padding:60px 20px; color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <a class="back-link" href="/">&larr; Inapoi la produse</a>
+  <div id="content">Se incarca...</div>
+</main>
+<footer>
+  Achizitia este conditionata de un raspuns corect la o intrebare de verificare, nu de noroc - produsul
+  digital nu se acorda prin tragere la sorti.
+  <div id="site-footer"></div>
+</footer>
+
+<script src="/common.js"></script>
+<script>
+const productId = new URLSearchParams(location.search).get('produs');
+let paymentMethods = { payu: true, stripe: false };
+
+async function loadPaymentMethods() {
+  try {
+    const res = await fetch('/api/payment-methods');
+    paymentMethods = await res.json();
+  } catch (err) {
+    // ramanem pe implicit (doar PayU)
+  }
+}
+
+async function load() {
+  const el = document.getElementById('content');
+  if (!productId) {
+    el.innerHTML = '<div class="not-found"><p>Produs nespecificat.</p><p><a href="/">Vezi toate produsele</a></p></div>';
+    return;
+  }
+  await loadPaymentMethods();
+  const res = await fetch('/api/products');
+  const products = await res.json();
+  const p = products.find((x) => x.id === productId);
+  if (!p) {
+    el.innerHTML = '<div class="not-found"><p>Produsul nu a fost gasit sau nu mai este disponibil.</p><p><a href="/">Vezi toate produsele</a></p></div>';
+    return;
+  }
+
+  document.title = p.name + ' - Concurs de abilitate';
+
+  const soldOut = p.stockRemaining <= 0;
+  const stockClass = soldOut ? 'out' : (p.stockRemaining <= p.stockTotal * 0.1 ? 'low' : 'ok');
+  const stockText = soldOut ? 'Stoc epuizat' : `${p.stockRemaining} din ${p.stockTotal} disponibile`;
+  const stockPct = p.stockTotal ? Math.max(0, Math.min(100, Math.round((p.stockRemaining / p.stockTotal) * 100))) : 0;
+
+  el.innerHTML = `
+    <div class="product-layout">
+      <div class="product-media">
+        <div class="product-image"><img src="${p.image ? escapeHtml(p.image) : '/img/placeholder.svg'}" alt="${escapeHtml(p.name)}" /></div>
+      </div>
+      <div class="product-info">
+        <h1>${escapeHtml(p.name)}</h1>
+        <p class="desc">${escapeHtml(p.description || '')}</p>
+
+        <div class="stock-pill ${stockClass}"><span class="dot"></span>${stockText}</div>
+        <div class="stock-bar-bg"><div class="stock-bar-fill" style="width:${stockPct}%"></div></div>
+        <div class="price-tag">${(p.priceBani / 100).toFixed(2)} ${escapeHtml((p.currency || 'ron').toUpperCase())}<span class="unit">/ bucata</span></div>
+        <div class="price-divider"></div>
+        ${soldOut ? `
+          <button disabled>Stoc epuizat</button>
+        ` : `
+          <form class="buy-form" onsubmit="return startCheckout(event, '${p.id}')">
+            <div class="field-row">
+              <div class="field-group"><label>Nume</label><input type="text" name="buyerName" placeholder="Numele tau" required /></div>
+              <div class="field-group"><label>Telefon</label><input type="tel" name="buyerPhone" placeholder="Numar de telefon" required /></div>
+            </div>
+            <div class="field-row">
+              <div class="field-group"><label>Email (optional)</label><input type="email" name="buyerEmail" placeholder="Pentru confirmare" /></div>
+              <div class="field-group"><label>Cantitate</label><input type="number" name="quantity" min="1" max="${p.stockRemaining}" value="1" required /></div>
+            </div>
+            <div class="field-group"><label>Adresa</label><input type="text" name="buyerAddress" placeholder="Necesara pentru factura" required /></div>
+            ${paymentMethods.payu && paymentMethods.stripe ? `
+            <div class="payment-method-choice">
+              <label><input type="radio" name="paymentMethod" value="payu" checked /> PayU</label>
+              <label><input type="radio" name="paymentMethod" value="stripe" /> Card (Stripe)</label>
+            </div>
+            ` : `<input type="hidden" name="paymentMethod" value="${paymentMethods.stripe ? 'stripe' : 'payu'}" />`}
+            <label class="terms-check">
+              <input type="checkbox" name="termsAccepted" required />
+              <span>Am citit si sunt de acord cu <a href="/termeni-si-conditii.html" target="_blank" rel="noopener">Termenii si conditiile</a> si <a href="/politica-confidentialitate.html" target="_blank" rel="noopener">Politica de confidentialitate</a>.</span>
+            </label>
+            ${paymentMethods.stripe ? `
+            <div class="secure-payment-badge">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+              <span>Plata securizata prin <strong class="stripe-brand">stripe</strong></span>
+            </div>
+            ` : ''}
+            <button type="submit">Cumpara</button>
+          </form>
+        `}
+        <div class="extra-links">
+          <a href="/participanti.html?produs=${p.id}">Vezi lista participantilor</a>
+          <a href="/numere.html?produs=${p.id}">Vezi toate numerele</a>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function startCheckout(event, productId) {
+  event.preventDefault();
+  const form = event.target;
+  const button = form.querySelector('button');
+  button.disabled = true;
+  button.textContent = 'Se proceseaza...';
+  try {
+    const res = await fetch('/api/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        productId,
+        name: form.buyerName.value,
+        phone: form.buyerPhone.value,
+        email: form.buyerEmail.value,
+        address: form.buyerAddress.value,
+        quantity: parseInt(form.quantity.value, 10),
+        paymentMethod: form.paymentMethod ? form.paymentMethod.value : 'payu',
+        termsAccepted: form.termsAccepted.checked,
+      }),
+    });
+    const data = await res.json();
+    if (data.url) {
+      location.href = data.url;
+    } else {
+      alert(data.error || 'A aparut o eroare. Incearca din nou.');
+      button.disabled = false;
+      button.textContent = 'Cumpara';
+    }
+  } catch (err) {
+    alert('A aparut o eroare de retea. Incearca din nou.');
+    button.disabled = false;
+    button.textContent = 'Cumpara';
+  }
+  return false;
+}
+
+load();
+</script>
+<script src="/cookie-notice.js"></script>
+</body>
+</html>

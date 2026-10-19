@@ -518,12 +518,25 @@ app.get('/api/produs/:id/participanti', (req, res) => {
 // cumparatorului (fara alte date de contact) pentru cele achizitionate - la
 // fel ca la lista de participanti, dar sub forma de grid complet, ca sa vada
 // clientii si ce numere mai sunt libere.
+// Cod scurt, public, pentru bara de cautare castigator de pe pagina
+// produsului - generat cu HMAC din ID-ul real al comenzii, folosind acelasi
+// secret ca si cookie-urile de sesiune (lib/session.js). Diferit in mod
+// deliberat de ID-ul real al comenzii: acela functioneaza ca o cheie de
+// acces (apare in linkul prin care clientul isi continua plata/deblocarea
+// biletului), deci NU poate fi aratat public - codul de mai jos nu poate fi
+// folosit sa acceseze comanda, e doar pentru identificare vizuala.
+const PUBLIC_CODE_SECRET = process.env.SESSION_SECRET || 'schimba-acest-secret-in-productie';
+function publicClientCode(orderId) {
+  const hash = crypto.createHmac('sha256', PUBLIC_CODE_SECRET).update(orderId).digest('hex').toUpperCase();
+  return `${hash.slice(0, 4)}-${hash.slice(4, 8)}`;
+}
+
 app.get('/api/produs/:id/numere', (req, res) => {
   const product = getProduct(req.params.id);
   if (!product) return res.status(404).json({ error: 'Produs inexistent.' });
   const tickets = db
     .prepare(
-      `SELECT t.number, o.buyer_name
+      `SELECT t.number, o.id as order_id, o.buyer_name
        FROM tickets t JOIN orders o ON o.id = t.order_id
        WHERE t.product_id = ?`
     )
@@ -536,6 +549,7 @@ app.get('/api/produs/:id/numere', (req, res) => {
       number: n,
       purchased: !!t,
       firstName: t ? (t.buyer_name || '').trim().split(/\s+/)[0] || 'Anonim' : null,
+      publicCode: t ? publicClientCode(t.order_id) : null,
     });
   }
   res.json({

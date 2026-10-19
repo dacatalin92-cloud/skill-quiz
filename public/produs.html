@@ -15,6 +15,23 @@
   .back-link { display:inline-flex; align-items:center; gap:6px; color:var(--muted); font-size:0.88rem; text-decoration:none; margin-bottom:18px; }
   .back-link:hover { color: var(--accent); }
 
+  .winner-bar { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px 18px; margin-bottom:18px; }
+  .winner-bar-label { font-size:0.8rem; color:var(--muted); margin:0 0 9px; display:flex; align-items:center; gap:6px; }
+  .winner-bar-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  #winner-search-input { flex:1 1 180px; min-width:0; padding:10px 12px; border-radius:9px; border:1px solid #2a2e38; background:#10131a; color:#e8eaed; font-size:0.9rem; }
+  #winner-search-input:focus { border-color: var(--accent); outline:none; }
+  #winner-search-btn { flex:0 0 auto; padding:10px 18px; border-radius:9px; font-weight:700; font-size:0.88rem; }
+  #winner-search-result { margin-top:10px; }
+  .winner-msg { color:var(--muted); font-size:0.85rem; margin:4px 0 0; }
+  .winner-result-card { background:#10131a; border:1px solid var(--border); border-radius:10px; padding:11px 14px; }
+  .winner-result-row { display:flex; justify-content:space-between; gap:10px; font-size:0.88rem; padding:4px 0; }
+  .winner-result-label { color:var(--muted); font-size:0.76rem; text-transform:uppercase; letter-spacing:0.03em; }
+  .winner-result-row code { background:#171a21; padding:2px 8px; border-radius:6px; font-size:0.85rem; color:#9badff; }
+  @media (max-width: 480px) {
+    .winner-bar-row { flex-direction:column; align-items:stretch; }
+    #winner-search-input, #winner-search-btn { flex:0 0 auto; width:100%; }
+  }
+
   .product-layout { display:grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap:28px; background: var(--card); border:1px solid var(--border); border-radius:18px; padding:24px; }
   @media (max-width: 760px) { .product-layout { grid-template-columns: 1fr; } }
 
@@ -74,6 +91,14 @@
 <body>
 <main>
   <a class="back-link" href="/">&larr; Inapoi la produse</a>
+  <div class="winner-bar">
+    <p class="winner-bar-label">&#127942; Cauta castigatorul dupa numar de bilet</p>
+    <div class="winner-bar-row">
+      <input id="winner-search-input" type="number" min="1" placeholder="ex: 7" />
+      <button type="button" id="winner-search-btn">Cauta</button>
+    </div>
+    <div id="winner-search-result"></div>
+  </div>
   <div id="content">Se incarca...</div>
 </main>
 <footer>
@@ -93,6 +118,37 @@ async function loadPaymentMethods() {
     paymentMethods = await res.json();
   } catch (err) {
     // ramanem pe implicit (doar PayU)
+  }
+}
+
+async function searchWinner() {
+  const resultEl = document.getElementById('winner-search-result');
+  const num = parseInt(document.getElementById('winner-search-input').value, 10);
+  if (!productId) { resultEl.innerHTML = '<p class="winner-msg">Produs nespecificat.</p>'; return; }
+  if (!num || num < 1) { resultEl.innerHTML = '<p class="winner-msg">Introdu un numar de bilet valid.</p>'; return; }
+  resultEl.innerHTML = '<p class="winner-msg">Se cauta...</p>';
+  try {
+    const res = await fetch(`/api/produs/${encodeURIComponent(productId)}/numere`);
+    if (!res.ok) { resultEl.innerHTML = '<p class="winner-msg">Produsul nu a fost gasit.</p>'; return; }
+    const data = await res.json();
+    const entry = data.numbers.find((n) => n.number === num);
+    if (!entry) {
+      resultEl.innerHTML = `<p class="winner-msg">Numarul ${num} nu exista la acest produs.</p>`;
+      return;
+    }
+    if (!entry.purchased) {
+      resultEl.innerHTML = `<p class="winner-msg">Numarul ${num} este inca liber - nu a fost achizitionat.</p>`;
+      return;
+    }
+    resultEl.innerHTML = `
+      <div class="winner-result-card">
+        <div class="winner-result-row"><span class="winner-result-label">Bilet</span><span>#${entry.number}</span></div>
+        <div class="winner-result-row"><span class="winner-result-label">Nume</span><span>${escapeHtml(entry.firstName || 'Anonim')}</span></div>
+        <div class="winner-result-row"><span class="winner-result-label">ID client</span><code>${escapeHtml(entry.publicCode || '-')}</code></div>
+      </div>
+    `;
+  } catch (err) {
+    resultEl.innerHTML = '<p class="winner-msg">Eroare de retea. Incearca din nou.</p>';
   }
 }
 
@@ -208,6 +264,11 @@ async function startCheckout(event, productId) {
   }
   return false;
 }
+
+document.getElementById('winner-search-btn').addEventListener('click', searchWinner);
+document.getElementById('winner-search-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); searchWinner(); }
+});
 
 load();
 </script>

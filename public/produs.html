@@ -199,7 +199,11 @@ async function load() {
               <div class="field-group"><label>Email (optional)</label><input type="email" name="buyerEmail" placeholder="Pentru confirmare" /></div>
               <div class="field-group"><label>Cantitate</label><input type="number" name="quantity" min="1" max="${p.stockRemaining}" value="1" required /></div>
             </div>
-            <div class="field-group"><label>Adresa</label><input type="text" name="buyerAddress" placeholder="Necesara pentru factura" required /></div>
+            <div class="field-group"><label>Strada si numar</label><input type="text" name="buyerStreet" placeholder="Ex: Str. Exemplu nr. 10" required /></div>
+                        <div class="field-row">
+                                      <div class="field-group"><label>Localitate</label><input type="text" name="buyerCity" placeholder="Orasul tau" required /></div>
+                                                    <div class="field-group"><label>Judet</label><input type="text" name="buyerCounty" placeholder="Judetul tau" required /></div>
+                                                                </div>
             ${paymentMethods.payu && paymentMethods.stripe ? `
             <div class="payment-method-choice">
               <label><input type="radio" name="paymentMethod" value="payu" checked /> PayU</label>
@@ -243,7 +247,9 @@ async function startCheckout(event, productId) {
         name: form.buyerName.value,
         phone: form.buyerPhone.value,
         email: form.buyerEmail.value,
-        address: form.buyerAddress.value,
+        street: form.buyerStreet.value,
+                city: form.buyerCity.value,
+                county: form.buyerCounty.value,
         quantity: parseInt(form.quantity.value, 10),
         paymentMethod: form.paymentMethod ? form.paymentMethod.value : 'payu',
         termsAccepted: form.termsAccepted.checked,

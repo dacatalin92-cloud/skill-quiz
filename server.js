@@ -87,7 +87,9 @@ async function createInvoiceForOrder(order) {
       buyerName: order.buyer_name,
       buyerEmail: order.buyer_email,
       buyerPhone: order.buyer_phone,
-      buyerAddress: order.buyer_address,
+      buyerAddress: order.buyer_street || order.buyer_address,
+            buyerCity: order.buyer_city,
+            buyerCounty: order.buyer_county,
       productName: product.name,
       priceRon: product.price_bani / 100,
       quantity: order.quantity,
@@ -561,7 +563,7 @@ app.get('/api/produs/:id/numere', (req, res) => {
 
 app.post('/api/checkout', async (req, res) => {
   try {
-    const { productId, name, phone, email, address, termsAccepted } = req.body;
+    const { productId, name, phone, email, street, city, county, termsAccepted } = req.body;
     // Metoda de plata aleasa de client: 'payu' (implicit) sau 'stripe'.
     let paymentMethod = req.body.paymentMethod === 'stripe' ? 'stripe' : 'payu';
     // PayU este ascuns temporar (HIDE_PAYU) - orice cerere care ar folosi PayU
@@ -587,13 +589,16 @@ app.post('/api/checkout', async (req, res) => {
     if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       return res.status(400).json({ error: 'Adresa de email nu este valida.' });
     }
-    // Adresa este obligatorie - factura Oblio emisa automat are nevoie de ea
-    // (fara adresa, factura nu poate fi emisa corect).
-    const trimmedAddress = address && String(address).trim() ? String(address).trim() : null;
-    if (!trimmedAddress) {
-      return res.status(400).json({ error: 'Adresa este obligatorie - este necesara pentru emiterea facturii.' });
-    }
-
+    // Adresa este obligatorie, pe rubrici separate - factura Oblio emisa
+        // automat are nevoie de strada+numar, localitate si judet completate
+        // corect ca sa fie emisa corect (fara adresa, factura nu poate fi emisa).
+        const trimmedStreet = street && String(street).trim() ? String(street).trim() : null;
+        const trimmedCity = city && String(city).trim() ? String(city).trim() : null;
+        const trimmedCounty = county && String(county).trim() ? String(county).trim() : null;
+        if (!trimmedStreet || !trimmedCity || !trimmedCounty) {
+                return res.status(400).json({ error: 'Strada si numarul, localitatea si judetul sunt obligatorii - sunt necesare pentru emiterea facturii.' });
+        }
+        const trimmedAddress = `${trimmedStreet}, ${trimmedCity}, jud. ${trimmedCounty}`;
     // Consimtamantul la Termeni si conditii trebuie bifat explicit de client
     // (checkbox necompletat implicit) - o bifa pusa automat de noi nu ar avea
     // valoare legala in caz de disputa sau control ANPC.
@@ -621,9 +626,9 @@ app.post('/api/checkout', async (req, res) => {
     const feeBani = 0; // Fara marketplace/split - toti banii merg direct in contul PayU al platformei.
 
     db.prepare(
-      `INSERT INTO orders (id, product_id, seller_id, buyer_name, buyer_phone, buyer_email, buyer_address, quantity, attempts_left, amount_bani, platform_fee_bani, payment_method, terms_accepted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(orderId, product.id, seller.id, String(name).trim(), String(phone).trim(), trimmedEmail, trimmedAddress, quantity, MAX_ATTEMPTS, totalBani, feeBani, paymentMethod, new Date().toISOString());
+      `INSERT INTO orders (id, product_id, seller_id, buyer_name, buyer_phone, buyer_email, buyer_address, buyer_street, buyer_city, buyer_county, quantity, attempts_left, amount_bani, platform_fee_bani, payment_method, terms_accepted_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          ).run(orderId, product.id, seller.id, String(name).trim(), String(phone).trim(), trimmedEmail, trimmedAddress, trimmedStreet, trimmedCity, trimmedCounty, quantity, MAX_ATTEMPTS, totalBani, feeBani, paymentMethod, new Date().toISOString());
 
     if (paymentMethod === 'stripe') {
       const { redirectUrl, sessionId } = await stripeClient.createCheckoutSession({

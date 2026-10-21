@@ -126,6 +126,20 @@ if (!orderColumns.includes('buyer_address')) {
   db.exec('ALTER TABLE orders ADD COLUMN buyer_address TEXT');
 }
 
+// Migratie usoara: adauga coloanele buyer_street, buyer_city, buyer_county -
+// adresa impartita pe rubrici separate (strada+numar, localitate, judet) in
+// loc de un singur camp liber, ca factura Oblio emisa automat sa aiba datele
+// structurate corect, pentru bazele de date create inainte de acest camp.
+if (!orderColumns.includes('buyer_street')) {
+    db.exec('ALTER TABLE orders ADD COLUMN buyer_street TEXT');
+}
+if (!orderColumns.includes('buyer_city')) {
+    db.exec('ALTER TABLE orders ADD COLUMN buyer_city TEXT');
+}
+if (!orderColumns.includes('buyer_county')) {
+    db.exec('ALTER TABLE orders ADD COLUMN buyer_county TEXT');
+}
+
 // Migratie usoara: adauga coloana reminder_24h_sent, folosita de task-ul
 // periodic care trimite pe WhatsApp un reminder cu stocul ramas si poza
 // produsului. Se aplica si comenzilor deja existente (nu doar celor noi) -

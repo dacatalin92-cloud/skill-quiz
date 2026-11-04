@@ -133,7 +133,7 @@ async function notifyAdminNewWhatsappMessage(fromPhone, body) {
   if (!subs.length) return;
   const payload = {
     title: 'Mesaj WhatsApp nou',
-    body: '+' + fromPhone + ': ' + String(body || '').slice(0, 120),
+    body: waPhoneLabel(fromPhone) + ': ' + String(body || '').slice(0, 120),
     url: BASE_URL + '/admin/whatsapp.html',
   };
   for (const sub of subs) {
@@ -1157,6 +1157,24 @@ app.post('/api/vanzator/produse/:id/delete', requireSeller, (req, res) => {
 const ADMIN_VEDE_CONTACT = ['1', 'true', 'da', 'yes', 'on'].includes(String(process.env.ADMIN_VEDE_CONTACT || '').trim().toLowerCase());
 const contactSauAscuns = (v) => (ADMIN_VEDE_CONTACT ? v : null);
 const contactCsv = (v) => (ADMIN_VEDE_CONTACT ? (v || '') : '(ascuns)');
+const contactText = (v) => (ADMIN_VEDE_CONTACT ? v : '(ascuns)');
+// Pe pagina de mesaje WhatsApp numarul se inlocuieste cu un cod opac (pentru a
+// putea raspunde in conversatie) si cu o eticheta mascata (ultimele 3 cifre).
+const WA_KEY_SECRET = process.env.SESSION_SECRET || 'schimba-acest-secret-in-productie';
+function waThreadKey(phone) {
+  if (ADMIN_VEDE_CONTACT) return phone;
+  return 'c' + require('crypto').createHmac('sha256', WA_KEY_SECRET).update(String(phone || '')).digest('hex').slice(0, 16);
+}
+function waPhoneLabel(phone) {
+  if (ADMIN_VEDE_CONTACT) return '+' + phone;
+  const digits = String(phone || '').replace(/\D/g, '');
+  return 'Client •••' + digits.slice(-3);
+}
+function waResolvePhone(key) {
+  if (ADMIN_VEDE_CONTACT) return key;
+  const phones = db.prepare('SELECT DISTINCT from_phone FROM whatsapp_messages').all().map((r) => r.from_phone);
+  return phones.find((ph) => waThreadKey(ph) === key) || null;
+}
 
 const VANZATORI_VAD_CONTACT = ['1', 'true', 'da', 'yes', 'on'].includes(String(process.env.VANZATORI_VAD_CONTACT || '').trim().toLowerCase());
 
@@ -1331,7 +1349,7 @@ app.get('/api/admin/comenzi', requireAdmin, (req, res) => {
       id: o.id,
       productName: o.product_name,
       sellerName: o.seller_name,
-      sellerEmail: o.seller_email,
+      sellerEmail: contactText(o.seller_email),
       buyerName: o.buyer_name,
       buyerPhone: contactSauAscuns(o.buyer_phone),
       buyerEmail: contactSauAscuns(o.buyer_email),
@@ -1510,7 +1528,7 @@ app.get('/api/admin/vanzatori', requireAdmin, (req, res) => {
     rows.map((r) => ({
       id: r.id,
       name: r.name,
-      email: r.email,
+      email: contactText(r.email),
       totalProducts: r.total_products,
       activeProducts: r.active_products || 0,
     }))
@@ -1772,7 +1790,8 @@ app.get('/api/admin/whatsapp-mesaje', requireAdmin, (req, res) => {
   res.json(
     rows.map((m) => ({
       id: m.id,
-      fromPhone: m.from_phone,
+      fromPhone: waThreadKey(m.from_phone),
+      fromLabel: waPhoneLabel(m.from_phone),
       body: m.body,
       receivedAt: m.received_at,
       direction: m.direction || 'in',
@@ -1788,7 +1807,7 @@ app.post('/api/admin/whatsapp-trimite', requireAdmin, async (req, res) => {
   if (!whatsapp) {
     return res.status(500).json({ error: 'WhatsApp nu este configurat (lipsesc variabilele META_WHATSAPP_TOKEN / META_PHONE_NUMBER_ID).' });
   }
-  const toPhone = req.body && req.body.toPhone;
+  const toPhone = req.body && req.body.toPhone ? waResolvePhone(String(req.body.toPhone)) : null;
   const messageBody = req.body && req.body.body;
   if (!toPhone || !messageBody || !String(messageBody).trim()) {
     return res.status(400).json({ error: 'Numarul de telefon si textul mesajului sunt obligatorii.' });

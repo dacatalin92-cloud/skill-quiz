@@ -880,8 +880,18 @@ app.get('/bilet/:orderId/:number.svg', (req, res) => {
 // API VANZATORI
 // =============================================================================
 
+// Inregistrarea de vanzatori noi se inchide cu INSCRIERI_VANZATORI=0 pe
+// Railway (implicit ramane deschisa, ca pana acum). Conturile existente
+// continua sa se poata loga.
+const INSCRIERI_VANZATORI = !['0', 'false', 'nu', 'no', 'off'].includes(String(process.env.INSCRIERI_VANZATORI || '1').trim().toLowerCase());
+
+app.get('/api/vanzator/inscrieri-deschise', (req, res) => res.json({ open: INSCRIERI_VANZATORI }));
+
 app.post('/api/vanzator/inregistrare', async (req, res) => {
   try {
+    if (!INSCRIERI_VANZATORI) {
+      return res.status(403).json({ error: 'Inregistrarea de conturi noi de vanzator este inchisa momentan.' });
+    }
     const { name, email, password } = req.body;
     if (!name || !email || !password || password.length < 8) {
       return res.status(400).json({ error: 'Nume, email si o parola de cel putin 8 caractere sunt obligatorii.' });
@@ -1137,6 +1147,11 @@ app.post('/api/vanzator/produse/:id/delete', requireSeller, (req, res) => {
 });
 
 // Evidenta achizitiilor - vanzatorul vede doar comenzile pentru produsele lui.
+// Vanzatorii NU mai primesc datele de contact ale clientilor (telefon,
+// email, adresa) - le vede doar adminul. Pune VANZATORI_VAD_CONTACT=1 pe
+// Railway daca vrei sa le reafisezi vreodata.
+const VANZATORI_VAD_CONTACT = ['1', 'true', 'da', 'yes', 'on'].includes(String(process.env.VANZATORI_VAD_CONTACT || '').trim().toLowerCase());
+
 app.get('/api/vanzator/comenzi', requireSeller, (req, res) => {
   const rows = db
     .prepare(
@@ -1151,9 +1166,10 @@ app.get('/api/vanzator/comenzi', requireSeller, (req, res) => {
       id: o.id,
       productName: o.product_name,
       buyerName: o.buyer_name,
-      buyerPhone: o.buyer_phone,
-      buyerEmail: o.buyer_email,
-      buyerAddress: o.buyer_address,
+      buyerPhone: VANZATORI_VAD_CONTACT ? o.buyer_phone : null,
+      buyerEmail: VANZATORI_VAD_CONTACT ? o.buyer_email : null,
+      buyerAddress: VANZATORI_VAD_CONTACT ? o.buyer_address : null,
+      contactHidden: !VANZATORI_VAD_CONTACT,
       quantity: o.quantity,
       status: o.status,
       amountBani: o.amount_bani,
@@ -1495,6 +1511,19 @@ app.get('/api/admin/vanzatori', requireAdmin, (req, res) => {
 // Dezactiveaza/activeaza dintr-o data toate produsele unui vanzator (ex.
 // pentru a-i scoate produsele de pe vitrina publica, fara sa se stearga
 // nimic din baza de date - actiune complet reversibila).
+// Schimba parola unui vanzator direct din panoul admin (il deconecteaza nu
+// imediat, ci la urmatoarea verificare - pentru deconectare instantanee a
+// tuturor, schimba SESSION_SECRET pe Railway).
+app.post('/api/admin/vanzatori/:id/parola', requireAdmin, async (req, res) => {
+  const seller = getSeller(req.params.id);
+  if (!seller) return res.status(404).json({ error: 'Vanzator inexistent.' });
+  const { password } = req.body || {};
+  if (!password || String(password).length < 8) return res.status(400).json({ error: 'Parola trebuie sa aiba cel putin 8 caractere.' });
+  const passwordHash = await bcrypt.hash(String(password), 10);
+  db.prepare('UPDATE sellers SET password_hash = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?').run(passwordHash, seller.id);
+  res.json({ ok: true });
+});
+
 app.post('/api/admin/vanzatori/:id/produse-active', requireAdmin, (req, res) => {
   const seller = getSeller(req.params.id);
   if (!seller) return res.status(404).json({ error: 'Vanzator inexistent.' });

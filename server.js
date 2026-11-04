@@ -1150,6 +1150,14 @@ app.post('/api/vanzator/produse/:id/delete', requireSeller, (req, res) => {
 // Vanzatorii NU mai primesc datele de contact ale clientilor (telefon,
 // email, adresa) - le vede doar adminul. Pune VANZATORI_VAD_CONTACT=1 pe
 // Railway daca vrei sa le reafisezi vreodata.
+// Nici in panoul admin nu se mai afiseaza telefonul, emailul si adresa
+// clientilor (nici in tabele, nici in exporturile CSV). Facturile Oblio se
+// emit in continuare corect, pentru ca serverul citeste datele direct din
+// baza de date. Pune ADMIN_VEDE_CONTACT=1 pe Railway ca sa le reafisezi.
+const ADMIN_VEDE_CONTACT = ['1', 'true', 'da', 'yes', 'on'].includes(String(process.env.ADMIN_VEDE_CONTACT || '').trim().toLowerCase());
+const contactSauAscuns = (v) => (ADMIN_VEDE_CONTACT ? v : null);
+const contactCsv = (v) => (ADMIN_VEDE_CONTACT ? (v || '') : '(ascuns)');
+
 const VANZATORI_VAD_CONTACT = ['1', 'true', 'da', 'yes', 'on'].includes(String(process.env.VANZATORI_VAD_CONTACT || '').trim().toLowerCase());
 
 app.get('/api/vanzator/comenzi', requireSeller, (req, res) => {
@@ -1240,12 +1248,12 @@ app.get('/api/admin/facturi-lipsa/export.csv', requireAdmin, (req, res) => {
         o.id,
         o.product_name || '',
         o.buyer_name || '',
-        o.buyer_phone || '',
-        o.buyer_email || '',
-        o.buyer_street || '',
-        o.buyer_city || '',
-        o.buyer_county || '',
-        o.buyer_address || '',
+        contactCsv(o.buyer_phone),
+        contactCsv(o.buyer_email),
+        contactCsv(o.buyer_street),
+        contactCsv(o.buyer_city),
+        contactCsv(o.buyer_county),
+        contactCsv(o.buyer_address),
         o.quantity,
         o.amount_bani != null ? (o.amount_bani / 100).toFixed(2) : '',
         o.product_price_bani != null ? ((o.product_price_bani * o.quantity) / 100).toFixed(2) : '',
@@ -1325,9 +1333,10 @@ app.get('/api/admin/comenzi', requireAdmin, (req, res) => {
       sellerName: o.seller_name,
       sellerEmail: o.seller_email,
       buyerName: o.buyer_name,
-      buyerPhone: o.buyer_phone,
-      buyerEmail: o.buyer_email,
-      buyerAddress: o.buyer_address,
+      buyerPhone: contactSauAscuns(o.buyer_phone),
+      buyerEmail: contactSauAscuns(o.buyer_email),
+      buyerAddress: contactSauAscuns(o.buyer_address),
+      contactHidden: !ADMIN_VEDE_CONTACT,
       quantity: o.quantity,
       status: o.status,
       amountBani: o.amount_bani,
@@ -1650,9 +1659,9 @@ app.get('/api/admin/produse/:id/export.csv', requireAdmin, (req, res) => {
       [
         o.created_at,
         o.buyer_name || '',
-        o.buyer_phone || '',
-        o.buyer_email || '',
-        o.buyer_address || '',
+        contactCsv(o.buyer_phone),
+        contactCsv(o.buyer_email),
+        contactCsv(o.buyer_address),
         o.quantity,
         numbers,
         (o.amount_bani / 100).toFixed(2),
@@ -1689,7 +1698,7 @@ app.get('/api/admin/produse/:id/numere', requireAdmin, (req, res) => {
       number: n,
       purchased: !!t,
       buyerName: t ? t.buyer_name || null : null,
-      buyerPhone: t ? t.buyer_phone || null : null,
+      buyerPhone: t ? contactSauAscuns(t.buyer_phone || null) : null,
       orderId: t ? t.order_id : null,
       purchasedAt: t ? t.created_at : null,
     });

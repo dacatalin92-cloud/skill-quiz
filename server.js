@@ -78,25 +78,35 @@ const oblio = oblioConfigured
   ? makeOblio({ email: OBLIO_EMAIL, secret: OBLIO_SECRET, cif: OBLIO_CIF, seriesName: OBLIO_SERIES })
   : null;
 
+// Emite factura Oblio pentru o comanda si salveaza seria/numarul/linkul.
+// Arunca eroare daca ceva nu merge (folosita de butoanele din panoul admin,
+// care trebuie sa afiseze motivul esecului).
+async function issueInvoiceForOrder(order) {
+  if (!oblio) throw new Error('Facturarea Oblio nu este configurata (lipsesc variabilele OBLIO_* de pe server).');
+  const product = getProduct(order.product_id);
+  if (!product) throw new Error('Produsul comenzii nu mai exista.');
+  const invoice = await oblio.createInvoice({
+    buyerName: order.buyer_name,
+    buyerEmail: order.buyer_email,
+    buyerPhone: order.buyer_phone,
+    buyerAddress: order.buyer_street || order.buyer_address,
+    buyerCity: order.buyer_city,
+    buyerCounty: order.buyer_county,
+    productName: product.name,
+    priceRon: product.price_bani / 100,
+    quantity: order.quantity,
+    orderId: order.id,
+  });
+  db.prepare('UPDATE orders SET invoice_series = ?, invoice_number = ?, invoice_link = ? WHERE id = ?')
+    .run(invoice.seriesName || null, invoice.number || null, invoice.link || null, order.id);
+  return invoice;
+}
+
+// Emiterea automata de la plata: erorile doar se logheaza.
 async function createInvoiceForOrder(order) {
   if (!oblio) return;
   try {
-    const product = getProduct(order.product_id);
-    if (!product) return;
-    const invoice = await oblio.createInvoice({
-      buyerName: order.buyer_name,
-      buyerEmail: order.buyer_email,
-      buyerPhone: order.buyer_phone,
-      buyerAddress: order.buyer_street || order.buyer_address,
-            buyerCity: order.buyer_city,
-            buyerCounty: order.buyer_county,
-      productName: product.name,
-      priceRon: product.price_bani / 100,
-      quantity: order.quantity,
-      orderId: order.id,
-    });
-    db.prepare('UPDATE orders SET invoice_series = ?, invoice_number = ?, invoice_link = ? WHERE id = ?')
-      .run(invoice.seriesName || null, invoice.number || null, invoice.link || null, order.id);
+    await issueInvoiceForOrder(order);
   } catch (err) {
     console.error('Nu am putut emite factura Oblio pentru comanda ' + order.id + ':', err.message);
   }
@@ -283,6 +293,28 @@ app.post('/stripe/webhook', express.raw({ type: '*/*' }), (req, res) => {
 });
 
 app.use(express.json()); app.post('/api/abonare', (req, res) => { const phone = req.body && req.body.phone; if (!isPlausiblePhone(phone)) { return res.status(400).json({ error: 'Un numar de telefon valid este obligatoriu.' }); } try { db.prepare('INSERT OR IGNORE INTO subscribers (id, phone) VALUES (?, ?)').run(uuidv4(), String(phone).trim()); res.json({ ok: true }); } catch (err) { console.error(err); res.status(500).json({ error: 'Eroare la abonare.' }); } }); app.get('/api/push/public-key', (req, res) => { res.json({ publicKey: pushConfigured ? PUSH_VAPID_PUBLIC_KEY : null }); }); app.get('/api/payment-methods', (req, res) => { res.json({ payu: !!payu && !HIDE_PAYU, stripe: !!stripeClient }); }); app.post('/api/push/subscribe', (req, res) => { const sub = req.body; if (!sub || !sub.endpoint || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) { return res.status(400).json({ error: 'Abonament push invalid.' }); } try { db.prepare('INSERT INTO push_subscriptions (id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth').run(uuidv4(), sub.endpoint, sub.keys.p256dh, sub.keys.auth); res.json({ ok: true }); } catch (err) { console.error(err); res.status(500).json({ error: 'Eroare la abonare push.' }); } });
+// ---- Site pe pauza ("in constructie") ----
+// Seteaza pe Railway variabila SITE_PAUZA=1 ca sa afisezi vizitatorilor o
+// pagina "site in constructie" in locul magazinului. Sterge variabila (sau
+// pune SITE_PAUZA=0) ca sa revii la normal - nu e nevoie de alt deploy.
+// Raman functionale: panoul admin, panoul vanzator, webhook-urile de plata
+// (Stripe/PayU), pagina de raspuns/descarcare pentru clientii care au platit
+// deja, si fisierele statice (css/js/imagini) de care au nevoie paginile.
+const SITE_PAUZA = ['1', 'true', 'da', 'yes', 'on'].includes(String(process.env.SITE_PAUZA || '').trim().toLowerCase());
+const SITE_PAUZA_MESAJ = process.env.SITE_PAUZA_MESAJ || 'Lucram la cateva imbunatatiri. Revenim in curand!';
+const PAUZA_ALLOW = [/^\/admin(\/|$)/, /^\/api\/admin(\/|$)/, /^\/vanzator(\/|$)/, /^\/api\/vanzator(\/|$)/, /^\/stripe\//, /^\/payu\//, /^\/api\/whatsapp\//, /^\/raspunde\.html$/, /^\/api\/answer$/, /^\/descarca\//, /^\/uploads\//, /\.(css|js|png|jpg|jpeg|webp|svg|ico|json|webmanifest|woff2?)$/i];
+function paginaPauza() {
+  return `<!DOCTYPE html><html lang="ro"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Site in constructie</title><meta name="robots" content="noindex"><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0f1117;color:#e8eaf0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;text-align:center;padding:24px;box-sizing:border-box}.box{max-width:520px}.icon{font-size:56px;margin-bottom:18px}h1{font-size:clamp(1.5rem,5vw,2.1rem);margin:0 0 12px}p{color:#9aa0ab;font-size:1.05rem;line-height:1.5;margin:0}</style></head><body><div class="box"><div class="icon">&#128679;</div><h1>Site in constructie</h1><p>${SITE_PAUZA_MESAJ.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</p></div></body></html>`;
+}
+if (SITE_PAUZA) {
+  console.warn('ATENTIE: SITE_PAUZA este activ - vizitatorii vad pagina "site in constructie".');
+  app.use((req, res, next) => {
+    if (PAUZA_ALLOW.some((re) => re.test(req.path))) return next();
+    if (req.path.startsWith('/api/')) return res.status(503).json({ error: 'Site-ul este momentan in constructie. Revenim in curand.' });
+    res.status(503).set('Cache-Control', 'no-store').type('html').send(paginaPauza());
+  });
+}
+
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads/images', express.static(IMAGES_DIR));
@@ -1151,6 +1183,113 @@ app.post('/api/admin/logout', (req, res) => {
 });
 
 app.get('/api/admin/me', requireAdmin, (req, res) => res.json({ ok: true }));
+
+// ---- Facturi Oblio emise manual din panoul admin ----
+const INVOICE_BATCH_SIZE = 50;
+let invoiceBatchRunning = false;
+
+function ordersWithoutInvoice() {
+  return db
+    .prepare(
+      `SELECT * FROM orders
+       WHERE status IN ('paid','locked','unlocked')
+         AND (invoice_number IS NULL OR invoice_number = '')
+       ORDER BY created_at ASC`
+    )
+    .all();
+}
+
+app.get('/api/admin/facturi-lipsa', requireAdmin, (req, res) => {
+  res.json({ count: ordersWithoutInvoice().length, batchSize: INVOICE_BATCH_SIZE, configured: !!oblio });
+});
+
+// Export CSV (se deschide in Excel) cu toate comenzile platite care nu au factura.
+app.get('/api/admin/facturi-lipsa/export.csv', requireAdmin, (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT o.*, p.name AS product_name, p.price_bani AS product_price_bani
+       FROM orders o LEFT JOIN products p ON p.id = o.product_id
+       WHERE o.status IN ('paid','locked','unlocked')
+         AND (o.invoice_number IS NULL OR o.invoice_number = '')
+       ORDER BY o.created_at ASC`
+    )
+    .all();
+  const csvField = (value) => `"${String(value == null ? '' : value).replace(/"/g, '""')}"`;
+  const header = ['Data comanda', 'ID comanda', 'Produs', 'Nume client', 'Telefon', 'Email', 'Strada', 'Localitate', 'Judet', 'Adresa (veche, completa)', 'Cantitate', 'Suma incasata (RON)', 'Pret produs acum x cantitate (RON)', 'Metoda plata', 'Status'];
+  const lines = [header.map(csvField).join(',')];
+  for (const o of rows) {
+    lines.push(
+      [
+        o.created_at,
+        o.id,
+        o.product_name || '',
+        o.buyer_name || '',
+        o.buyer_phone || '',
+        o.buyer_email || '',
+        o.buyer_street || '',
+        o.buyer_city || '',
+        o.buyer_county || '',
+        o.buyer_address || '',
+        o.quantity,
+        o.amount_bani != null ? (o.amount_bani / 100).toFixed(2) : '',
+        o.product_price_bani != null ? ((o.product_price_bani * o.quantity) / 100).toFixed(2) : '',
+        o.payment_method || '',
+        o.status,
+      ]
+        .map(csvField)
+        .join(',')
+    );
+  }
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="comenzi-fara-factura.csv"');
+  res.send('\ufeff' + lines.join('\r\n'));
+});
+
+// Emite facturile lipsa, cate INVOICE_BATCH_SIZE (50) la o apasare, de la cea
+// mai veche comanda. Se opreste la prima eroare de autentificare/configurare,
+// ca sa nu repete aceeasi eroare de 50 de ori.
+app.post('/api/admin/facturi/emite-lipsa', requireAdmin, async (req, res) => {
+  if (!oblio) return res.status(500).json({ error: 'Facturarea Oblio nu este configurata (lipsesc variabilele OBLIO_* de pe server).' });
+  if (invoiceBatchRunning) return res.status(409).json({ error: 'O emitere de facturi este deja in curs. Asteapta sa se termine.' });
+  invoiceBatchRunning = true;
+  try {
+    const batch = ordersWithoutInvoice().slice(0, INVOICE_BATCH_SIZE);
+    const issued = [];
+    const failed = [];
+    for (const order of batch) {
+      // Re-citim comanda, sa nu emitem de doua ori daca a aparut factura intre timp.
+      const fresh = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
+      if (!fresh || fresh.invoice_number) continue;
+      try {
+        const inv = await issueInvoiceForOrder(fresh);
+        issued.push({ orderId: order.id, series: inv.seriesName, number: inv.number });
+      } catch (err) {
+        failed.push({ orderId: order.id, buyerName: order.buyer_name, error: err.message });
+        if (/token Oblio/i.test(err.message)) break;
+      }
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    res.json({ issued: issued.length, failed, remaining: ordersWithoutInvoice().length });
+  } catch (err) {
+    console.error('Eroare la emiterea in lot a facturilor:', err.message);
+    res.status(500).json({ error: err.message });
+  } finally {
+    invoiceBatchRunning = false;
+  }
+});
+
+app.post('/api/admin/comenzi/:id/factura', requireAdmin, async (req, res) => {
+  const order = db.prepare(`SELECT * FROM orders WHERE id = ? AND status IN ('paid','locked','unlocked')`).get(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Comanda nu exista sau nu este platita.' });
+  if (order.invoice_number) return res.status(409).json({ error: 'Comanda are deja factura.' });
+  if (invoiceBatchRunning) return res.status(409).json({ error: 'O emitere de facturi in lot este in curs.' });
+  try {
+    const inv = await issueInvoiceForOrder(order);
+    res.json({ ok: true, series: inv.seriesName, number: inv.number, link: inv.link });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
 
 app.get('/api/admin/comenzi', requireAdmin, (req, res) => {
   const rows = db

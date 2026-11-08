@@ -301,16 +301,18 @@ app.use(express.json()); app.post('/api/abonare', (req, res) => { const phone = 
 // (Stripe/PayU), pagina de raspuns/descarcare pentru clientii care au platit
 // deja, si fisierele statice (css/js/imagini) de care au nevoie paginile.
 const SITE_PAUZA = ['1', 'true', 'da', 'yes', 'on'].includes(String(process.env.SITE_PAUZA || '').trim().toLowerCase());
-const SITE_PAUZA_MESAJ = process.env.SITE_PAUZA_MESAJ || 'Lucram la cateva imbunatatiri. Revenim in curand!';
+const SITE_PAUZA_TITLU = process.env.SITE_PAUZA_TITLU || 'Site-ul meu de tombole nu mai merge.';
+const SITE_PAUZA_MESAJ = process.env.SITE_PAUZA_MESAJ || 'Sorry!';
 const PAUZA_ALLOW = [/^\/admin(\/|$)/, /^\/api\/admin(\/|$)/, /^\/vanzator(\/|$)/, /^\/api\/vanzator(\/|$)/, /^\/stripe\//, /^\/payu\//, /^\/api\/whatsapp\//, /^\/raspunde\.html$/, /^\/api\/answer$/, /^\/descarca\//, /^\/uploads\//, /\.(css|js|png|jpg|jpeg|webp|svg|ico|json|webmanifest|woff2?)$/i];
 function paginaPauza() {
-  return `<!DOCTYPE html><html lang="ro"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Site in constructie</title><meta name="robots" content="noindex"><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0f1117;color:#e8eaf0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;text-align:center;padding:24px;box-sizing:border-box}.box{max-width:520px}.icon{font-size:56px;margin-bottom:18px}h1{font-size:clamp(1.5rem,5vw,2.1rem);margin:0 0 12px}p{color:#9aa0ab;font-size:1.05rem;line-height:1.5;margin:0}</style></head><body><div class="box"><div class="icon">&#128679;</div><h1>Site in constructie</h1><p>${SITE_PAUZA_MESAJ.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</p></div></body></html>`;
+  const esc = (t) => String(t).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+  return `<!DOCTYPE html><html lang="ro"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${esc(SITE_PAUZA_TITLU)}</title><meta name="robots" content="noindex"><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0f1117;color:#e8eaf0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;text-align:center;padding:24px;box-sizing:border-box}.box{max-width:520px}.icon{font-size:56px;margin-bottom:18px}h1{font-size:clamp(1.5rem,5vw,2.1rem);margin:0 0 12px}p{color:#9aa0ab;font-size:1.05rem;line-height:1.5;margin:0}</style></head><body><div class="box"><h1>${esc(SITE_PAUZA_TITLU)}</h1><p>${esc(SITE_PAUZA_MESAJ)}</p></div></body></html>`;
 }
 if (SITE_PAUZA) {
-  console.warn('ATENTIE: SITE_PAUZA este activ - vizitatorii vad pagina "site in constructie".');
+  console.warn('ATENTIE: SITE_PAUZA este activ - vizitatorii vad pagina de pauza.');
   app.use((req, res, next) => {
     if (PAUZA_ALLOW.some((re) => re.test(req.path))) return next();
-    if (req.path.startsWith('/api/')) return res.status(503).json({ error: 'Site-ul este momentan in constructie. Revenim in curand.' });
+    if (req.path.startsWith('/api/')) return res.status(503).json({ error: SITE_PAUZA_TITLU + ' ' + SITE_PAUZA_MESAJ });
     res.status(503).set('Cache-Control', 'no-store').type('html').send(paginaPauza());
   });
 }

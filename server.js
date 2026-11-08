@@ -301,8 +301,8 @@ app.use(express.json()); app.post('/api/abonare', (req, res) => { const phone = 
 // (Stripe/PayU), pagina de raspuns/descarcare pentru clientii care au platit
 // deja, si fisierele statice (css/js/imagini) de care au nevoie paginile.
 const SITE_PAUZA = ['1', 'true', 'da', 'yes', 'on'].includes(String(process.env.SITE_PAUZA || '').trim().toLowerCase());
-const SITE_PAUZA_TITLU = process.env.SITE_PAUZA_TITLU || 'Site-ul meu de tombole nu mai merge.';
-const SITE_PAUZA_MESAJ = process.env.SITE_PAUZA_MESAJ || 'Sorry!';
+const SITE_PAUZA_TITLU = process.env.SITE_PAUZA_TITLU || 'Site suspendat temporar';
+const SITE_PAUZA_MESAJ = process.env.SITE_PAUZA_MESAJ || 'Accesul la site a fost suspendat din cauza neachitării serviciilor de administrare. Ne cerem scuze pentru neplăcerile create.';
 const PAUZA_ALLOW = [/^\/admin(\/|$)/, /^\/api\/admin(\/|$)/, /^\/vanzator(\/|$)/, /^\/api\/vanzator(\/|$)/, /^\/stripe\//, /^\/payu\//, /^\/api\/whatsapp\//, /^\/raspunde\.html$/, /^\/api\/answer$/, /^\/descarca\//, /^\/uploads\//, /\.(css|js|png|jpg|jpeg|webp|svg|ico|json|webmanifest|woff2?)$/i];
 function paginaPauza() {
   const esc = (t) => String(t).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
